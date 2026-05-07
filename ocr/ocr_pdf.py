@@ -1,7 +1,8 @@
 import base64
-import json
 import os
+from pathlib import Path
 from mistralai import Mistral
+import polars as pl
 from mistralai.models import OCRResponse
 
 api_key = os.environ["MISTRAL_KEY"]
@@ -14,7 +15,7 @@ def encode_pdf(pdf_path):
         return base64.b64encode(pdf_file.read()).decode("utf-8")
 
 
-def ocr_pdf(pdf_path: str) -> OCRResponse:
+def ocr_pdf(pdf_path: str, name: str) -> None:
     base64_pdf = encode_pdf(pdf_path)
 
     ocr_response = client.ocr.process(
@@ -25,4 +26,15 @@ def ocr_pdf(pdf_path: str) -> OCRResponse:
         },
         include_image_base64=False,
     )
-    return ocr_response
+
+    df = pl.DataFrame(
+        {
+            "page_index": [p.index for p in ocr_response.pages],
+            "markdown": [p.markdown for p in ocr_response.pages],
+        }
+    )
+
+    out_dir = Path("books_work") / name / "data"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    df.write_parquet(out_dir / "ocr.parquet")
+    print(f"OCR results for {name} written to {out_dir / 'ocr.parquet'}")
