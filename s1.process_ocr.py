@@ -37,6 +37,7 @@ if out_path.exists():
 
 try:
     ocr_pdf(pdf_path=str(pdf_path), name=name)
+    print(f"\n✓ Done! OCR results saved to books_work/{name}/data/ocr.parquet")
 except KeyError:
     print("Error: MISTRAL_KEY not found. Check your .env file.")
     sys.exit(1)
