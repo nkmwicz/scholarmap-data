@@ -100,18 +100,19 @@ def setup_clusters(
     soft_margin: float = 0.1,
     soft_assign: bool = True,
     iter: int = 0,
-) -> tuple[list[int], np.ndarray, int]:
+) -> tuple[list[int], list[list[int]], np.ndarray, int]:
     """
     Sets embeds into clusters based on cosine similarity to centroids.
 
     Parameters:
         centroids (list[np.ndarray]): History of centroid arrays; the last entry (centroid) is used for the current iteration.
         embeds (np.ndarray): The embedded vectors.
-        clusters (list[list]): The list of clusters to populate. A list for each cluster.
-        soft_margin (float): The margin for soft assignment.
+        clusters (list[list[int]]): The list of clusters to populate. A list for each cluster.
+        soft_margin (float): A point is soft-assigned to cluster c if sim(point, c) >= best_sim * (1 - soft_margin).
         soft_assign (bool): Whether to use soft assignment or hard assignment.
     Returns:
-        embed_clust (list[int]): The list of clusters (0-k clusters) for each embed. Align to embeds.
+        embed_clust (list[int]): Hard assignment — best-matching cluster index for each embed (aligned to embeds).
+        soft_clusters (list[list[int]]): Soft membership — for each cluster, the list of embed indices assigned to it (may overlap).
         centroid (np.ndarray): The final centroid array after convergence.
         iter (int): The number of iterations taken to converge.
     """
@@ -124,13 +125,10 @@ def setup_clusters(
     # max_sim_indices = np.argmax(sims, axis=1)
 
     if soft_assign:
-        best_sim = np.max(sims, axis=1).reshape(-1, 1)  # gets values
-        # soft assignment within margin
-        sim_diffs = np.diff(np.sort(sims, axis=1), axis=1).astype(np.float64)
-        marg_num = (1 - soft_margin) * 100
-        print(marg_num)
-        margin = np.percentile(sim_diffs, marg_num)
-        soft_mask = sims >= (best_sim - margin)
+        best_sim = np.max(sims, axis=1).reshape(-1, 1)  # (n, 1)
+        # A point is soft-assigned to cluster c if its similarity is within
+        # soft_margin of its best similarity: sim >= best_sim * (1 - soft_margin)
+        soft_mask = sims >= (best_sim * (1 - soft_margin))
         item, group = np.where(soft_mask)
         for idx, num in enumerate(group):
             clusters[num].append(int(item[idx]))
@@ -191,11 +189,11 @@ def setup_clusters(
     change_norm = np.linalg.norm(last_centroid - this_centroid)
 
     if iter == 100 or change_norm < threshold:
-        embed_clust = [0 for n in range(embeds.shape[0])]
-        for idx, cluster in enumerate(clusters):
-            for clus in cluster:
-                embed_clust[clus] = idx
-        return embed_clust, this_centroid, iter
+        # Hard assignment: best-matching cluster per point via argmax over similarities
+        embed_clust: list[int] = np.argmax(sims, axis=1).tolist()
+        # Soft clusters: the accumulated overlap-aware membership lists
+        soft_clusters: list[list[int]] = clusters
+        return embed_clust, soft_clusters, this_centroid, iter
     else:
         reset_clusters = [[] for _ in range(len(centroid))]
         iter += 1
@@ -209,29 +207,48 @@ def setup_clusters(
         )
 
 
-def return_representative_samples(embeds, clusters, centroids):
+def return_representative_samples(
+    embeds: np.ndarray,
+    clusters: list[int],
+    centroids: np.ndarray,
+    random_state: int = 42,
+) -> list[list[int]]:
     """
-    Returns the 10 most representative samples from each cluster based on cosine similarity to the cluster centroid.
+    Returns 10 samples per cluster: the 7 most representative (by cosine similarity
+    to the centroid) plus 3 random samples from the remainder. Combined into a single
+    flat list per cluster for use in labelling (e.g. sending to an LLM).
 
     Parameters:
         embeds (np.ndarray): The embedded vectors.
-        clusters (list[int]): The list of clusters (0-k clusters) for each embed. Align to embeds.
-        centroids (list[np.ndarray]): The centroid of each cluster.
+        clusters (list[int]): Hard cluster assignment per embed (aligned to embeds).
+        centroids (np.ndarray): The centroid array, shape (k, d).
+        random_state (int): Seed for random sampling.
 
     Returns:
-        Representative samples (list[list[int]]): A list of lists containing the indices of the 10 most representative samples for each cluster.
+        list[list[int]]: One list per cluster of 10 embed indices (7 top + 3 random).
     """
-    representat_samples = []
+    rng = np.random.default_rng(random_state)
     X = embeds.astype(np.float64, copy=False)
     Xn = normalize_rows(X)
     C = np.array(centroids).astype(np.float64, copy=False)
     sims = Xn @ C.T  # cosine similarity
+
+    representative_samples = []
     for cluster_idx in range(len(centroids)):
         cluster_indices = [i for i, c in enumerate(clusters) if c == cluster_idx]
         cluster_sims = sims[cluster_indices, cluster_idx]
-        top_indices = np.argsort(cluster_sims)[-10:][::-1]  # Top 10 indices
-        representat_samples.append([cluster_indices[i] for i in top_indices])
-    return representat_samples
+
+        top_local = np.argsort(cluster_sims)[-7:][::-1]
+        top = [cluster_indices[i] for i in top_local]
+
+        remaining = [idx for idx in cluster_indices if idx not in set(top)]
+        k = min(3, len(remaining))
+        random_picks = (
+            rng.choice(remaining, size=k, replace=False).tolist() if k > 0 else []
+        )
+
+        representative_samples.append(top + random_picks)
+    return representative_samples
 
 
 def estimate_num_clusters(embeddings: np.ndarray, sample_size: int = 1000) -> int:
@@ -295,7 +312,11 @@ def create_cluster(
         soft_margin (float): The margin for soft assignment.
 
     Returns:
-        list: A list of clusters.
+        tuple:
+            - embed_clust (list[int]): Hard assignment — best cluster index per embed.
+            - soft_clusters (list[list[int]]): Soft membership lists per cluster (may overlap).
+            - representative_samples (list[list[int]]): Top-10 most representative embed indices per cluster.
+            - iters (int): Number of iterations to convergence.
     """
     # Normalize the embedded vectors
     arr = np.asarray(embed_list, dtype=object)
@@ -315,9 +336,11 @@ def create_cluster(
     centroids = [centroids]
     groups = [[] for _ in range(num_clusters)]
 
-    clusters, new_centroids, iters = setup_clusters(
+    embed_clust, soft_clusters, new_centroids, iters = setup_clusters(
         centroids, arr, groups, soft_assign=soft_assign, soft_margin=soft_margin, iter=0
     )
-    representative_samples = return_representative_samples(arr, clusters, new_centroids)
+    representative_samples = return_representative_samples(
+        arr, embed_clust, new_centroids
+    )
 
-    return clusters, representative_samples, iters
+    return embed_clust, soft_clusters, representative_samples, iters
