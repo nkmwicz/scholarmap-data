@@ -97,7 +97,6 @@ def setup_clusters(
     centroids: list[np.ndarray],
     embeds: np.ndarray,
     clusters: list[list[int]],
-    soft_margin: float = 0.1,
     soft_assign: bool = True,
     iter: int = 0,
 ) -> tuple[list[int], list[list[int]] | None, np.ndarray, int]:
@@ -108,8 +107,10 @@ def setup_clusters(
         centroids (list[np.ndarray]): History of centroid arrays; the last entry (centroid) is used for the current iteration.
         embeds (np.ndarray): The embedded vectors.
         clusters (list[list[int]]): The list of clusters to populate. A list for each cluster.
-        soft_margin (float): A point is soft-assigned to cluster c if sim(point, c) >= best_sim * (1 - soft_margin).
         soft_assign (bool): Whether to use soft assignment or hard assignment.
+            When True, the margin is computed dynamically as the median relative gap between
+            best and second-best cluster similarity across all points. Each document is capped
+            at max(1, k // 4) cluster memberships.
     Returns:
         embed_clust (list[int]): Hard assignment — best-matching cluster index for each embed (aligned to embeds).
         soft_clusters (list[list[int]] | None): Soft membership per cluster (may overlap). None when soft_assign=False.
@@ -125,10 +126,30 @@ def setup_clusters(
     # max_sim_indices = np.argmax(sims, axis=1)
 
     if soft_assign:
+        k = centroid.shape[0]
         best_sim = np.max(sims, axis=1).reshape(-1, 1)  # (n, 1)
-        # A point is soft-assigned to cluster c if its similarity is within
-        # soft_margin of its best similarity: sim >= best_sim * (1 - soft_margin)
-        soft_mask = sims >= (best_sim * (1 - soft_margin))
+
+        # Dynamic margin: median relative gap between best and second-best cluster similarity.
+        # If most points have a tight best/2nd-best gap, the margin shrinks accordingly.
+        if k >= 2:
+            sorted_sims = np.sort(sims, axis=1)[:, ::-1]
+            rel_gaps = 1.0 - (sorted_sims[:, 1] / np.maximum(sorted_sims[:, 0], 1e-10))
+            dynamic_margin = float(np.median(rel_gaps))
+        else:
+            dynamic_margin = 0.0
+
+        soft_mask = sims >= (best_sim * (1 - dynamic_margin))
+
+        # Cap: each document belongs to at most max(1, k // 4) clusters
+        max_per_doc = max(1, k // 4)
+        row_counts = soft_mask.sum(axis=1)
+        over_cap = np.where(row_counts > max_per_doc)[0]
+        for i in over_cap:
+            top_idx = np.argpartition(sims[i], -max_per_doc)[-max_per_doc:]
+            new_row = np.zeros(k, dtype=bool)
+            new_row[top_idx] = True
+            soft_mask[i] = new_row
+
         item, group = np.where(soft_mask)
         for idx, num in enumerate(group):
             clusters[num].append(int(item[idx]))
@@ -202,7 +223,6 @@ def setup_clusters(
             Xn,
             reset_clusters,
             soft_assign=soft_assign,
-            soft_margin=soft_margin,
             iter=iter,
         )
 
@@ -298,25 +318,53 @@ def estimate_num_clusters(embeddings: np.ndarray, sample_size: int = 1000) -> in
     return max(cube_root_k, eigenvalue_gap_k)
 
 
+def _score_clustering(
+    embed_clust: list[int], centroids: np.ndarray, Xn: np.ndarray
+) -> float:
+    """
+    Score a clustering result by mean intra-cluster cosine similarity.
+    Higher is better — a run with no catch-all cluster will score higher
+    because all documents sit closer to their respective centroids.
+
+    Parameters:
+        embed_clust (list[int]): Hard cluster assignment per embed.
+        centroids (np.ndarray): Final centroid array, shape (k, d).
+        Xn (np.ndarray): Row-normalised embed matrix, shape (n, d).
+    Returns:
+        float: Mean cosine similarity of each document to its assigned centroid.
+    """
+    C = normalize_rows(centroids.astype(np.float64, copy=False))
+    assignments = np.array(embed_clust, dtype=int)
+    assigned_centroids = C[assignments]  # (n, d)
+    sims = np.einsum("ij,ij->i", Xn, assigned_centroids)  # per-doc cosine sim
+    return float(np.mean(sims))
+
+
 def create_cluster(
-    embed_list, num_clusters: int | None = None, soft_assign=True, soft_margin=0.1
+    embed_list,
+    num_clusters: int | None = None,
+    soft_assign: bool = True,
+    n_restarts: int = 10,
 ):
     """
-    Create clusters from embedded vectors.
+    Create clusters from embedded vectors, using multiple random restarts to
+    avoid poor local minima (e.g. a single catch-all cluster).
 
     Parameters:
         embed_list (list): The list of embedded vectors.
         num_clusters (int | None): The number of clusters. If None, estimated automatically
             using the eigenvalue gap method with cube root of n as a minimum.
         soft_assign (bool): Whether to use soft assignment or hard assignment.
-        soft_margin (float): The margin for soft assignment.
+            Margin and per-document cap are computed dynamically (see setup_clusters).
+        n_restarts (int): Number of independent runs with different random seeds.
+            The run with the highest mean intra-cluster cosine similarity is returned.
 
     Returns:
         tuple:
             - embed_clust (list[int]): Hard assignment — best cluster index per embed (aligned to embeds).
             - soft_membership (list[list[int]] | None): Per-embed list of all cluster indices it was soft-assigned to (aligned to embeds). None when soft_assign=False.
             - representative_samples (list[list[int]]): 10 samples per cluster (7 most representative + 3 random).
-            - iters (int): Number of iterations to convergence.
+            - iters (int): Number of iterations to convergence for the best run.
     """
     # Normalize the embedded vectors
     arr = np.asarray(embed_list, dtype=object)
@@ -329,16 +377,32 @@ def create_cluster(
         num_clusters = estimate_num_clusters(arr)
         print(f"  Estimated number of clusters: {num_clusters}")
 
-    # create random cluster centroid for first iteration
-    centroids_idx, centroids = kmeans_plus_plus_init(
-        arr, num_clusters, random_state=42, return_indices=True
-    )
-    centroids = [centroids]
-    groups = [[] for _ in range(num_clusters)]
+    Xn = normalize_rows(arr)
 
-    embed_clust, soft_clusters, new_centroids, iters = setup_clusters(
-        centroids, arr, groups, soft_assign=soft_assign, soft_margin=soft_margin, iter=0
-    )
+    best_score: float = -np.inf
+    best_result: tuple | None = None
+
+    for seed in range(n_restarts):
+        centroids_idx, centroids = kmeans_plus_plus_init(
+            arr, num_clusters, random_state=seed, return_indices=True
+        )
+        groups = [[] for _ in range(num_clusters)]
+
+        embed_clust, soft_clusters, new_centroids, iters = setup_clusters(
+            [centroids], arr, groups, soft_assign=soft_assign, iter=0
+        )
+
+        score = _score_clustering(embed_clust, new_centroids, Xn)
+        print(f"  Restart {seed + 1}/{n_restarts} — score: {score:.4f}")
+
+        if score > best_score:
+            best_score = score
+            best_result = (embed_clust, soft_clusters, new_centroids, iters)
+
+    assert best_result is not None
+    embed_clust, soft_clusters, new_centroids, iters = best_result
+    print(f"  Best score: {best_score:.4f}")
+
     representative_samples = return_representative_samples(
         arr, embed_clust, new_centroids
     )
