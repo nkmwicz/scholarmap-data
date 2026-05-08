@@ -1,13 +1,8 @@
 import base64
 import os
 from pathlib import Path
-from mistralai import Mistral
+from mistralai.client import Mistral
 import polars as pl
-from mistralai.models import OCRResponse
-
-api_key = os.environ["MISTRAL_KEY"]
-
-client = Mistral(api_key=api_key)
 
 
 def encode_pdf(pdf_path):
@@ -17,6 +12,9 @@ def encode_pdf(pdf_path):
 
 
 def ocr_pdf(pdf_path: str, name: str) -> None:
+    api_key = os.environ["MISTRAL_KEY"]
+    client = Mistral(api_key=api_key)
+
     base64_pdf = encode_pdf(pdf_path)
 
     print("  Sending to Mistral OCR...")
@@ -40,5 +38,5 @@ def ocr_pdf(pdf_path: str, name: str) -> None:
 
     out_dir = Path("books_work") / name / "data"
     out_dir.mkdir(parents=True, exist_ok=True)
-    print(f"  Saving to {out_dir} / ocr.parquet...")
+    print(f"  Saving to {out_dir / 'ocr.parquet'}...")
     df.write_parquet(out_dir / "ocr.parquet")
