@@ -1,5 +1,9 @@
 import sys
 from pathlib import Path
+from utils.check_env import check_environment
+
+check_environment()
+
 from dotenv import load_dotenv
 import questionary
 
