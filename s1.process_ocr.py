@@ -1,17 +1,22 @@
 import sys
 from pathlib import Path
 from dotenv import load_dotenv
+import questionary
 
 load_dotenv("./.env")
 
 from ocr.ocr_pdf import ocr_pdf
 
-name = input("Name for the output folder: ").strip()
-if not name:
+name = questionary.text("Name for this document (must be unique):").ask()
+if not name or not name.strip():
     print("Error: name cannot be empty.")
     sys.exit(1)
+name = name.strip()
 
-path = input("PDF path: ").strip().strip('"')
+path = questionary.path("PDF path:", only_directories=False).ask()
+if not path:
+    sys.exit(0)
+path = path.strip().strip('"')
 pdf_path = Path(path)
 if not pdf_path.exists():
     print(f"Error: file not found: {pdf_path}")
@@ -22,13 +27,11 @@ if pdf_path.suffix.lower() != ".pdf":
 
 out_path = Path("books_work") / name / "data" / "ocr.parquet"
 if out_path.exists():
-    print(f"\n'{out_path}' already exists.")
-    print("  [1] Overwrite")
-    print("  [2] Cancel")
-    choice = input("Choose an option: ").strip()
-    if choice == "1":
-        pass
-    else:
+    choice = questionary.select(
+        f"'{out_path}' already exists. What would you like to do?",
+        choices=["Overwrite", "Cancel"],
+    ).ask()
+    if choice != "Overwrite":
         print("Cancelled.")
         sys.exit(0)
 
