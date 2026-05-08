@@ -78,21 +78,19 @@ print(f"\n  Loaded '{processed_parquet}' — {len(df)} rows.")
 
 from embeds.embed_letters import chunk_and_tokenize_letters
 
-out_path = data_dir / f"{name}_chunked.parquet"
-if out_path.exists():
-    choice = questionary.select(
-        f"'{out_path}' already exists. What would you like to do?",
-        choices=["Overwrite", "Cancel"],
-    ).ask()
-    if choice != "Overwrite":
-        print("Cancelled.")
-        sys.exit(0)
+choice = questionary.select(
+    f"This will overwrite '{processed_parquet}'. What would you like to do?",
+    choices=["Overwrite", "Cancel"],
+).ask()
+if choice != "Overwrite":
+    print("Cancelled.")
+    sys.exit(0)
 
 try:
     df = df.with_row_index("id", offset=10000)
     df = chunk_and_tokenize_letters(df)
-    df.write_parquet(out_path)
-    print(f"\n✓ Done! Chunked embeddings saved to {out_path}")
+    df.write_parquet(processed_parquet)
+    print(f"\n✓ Done! Embeddings saved to {processed_parquet}")
 except Exception as e:
     print(f"Error: {e}")
     sys.exit(1)
