@@ -2,14 +2,22 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 import polars as pl
 from typing import List
 from sentence_transformers import SentenceTransformer
+import time
 
 
 def word_len(s: str):
     return len(s.split())
 
+#
+#
+# Model Name
+#
+#
+model_name = "ibm-granite/granite-embedding-97m-multilingual-r2"
+
 
 _model = SentenceTransformer(
-    "ibm-granite/granite-embedding-97m-multilingual-r2", device="cuda"
+    model_name, device="cuda"
 )
 
 
@@ -24,7 +32,10 @@ def encode(sentences: List[str]) -> List[List[float]]:
 
     """
 
-    embeddings = _model.encode(sentences, batch_size=8, show_progress_bar=True)
+    embeddings = _model.encode(
+        sentences, 
+        batch_size=1, 
+        show_progress_bar=True)
     return embeddings.tolist()
 
 
@@ -74,6 +85,8 @@ def chunk_and_tokenize_letters(df: pl.DataFrame) -> pl.DataFrame:
     Returns:
         pl.DataFrame: The DataFrame with chunked text and updated metadata.
     """
+    t1 = time.time()
+    print("Starting chunking and tokenization...")
     df = df.with_row_index("letter_id", offset=10000)
     df = df.with_columns(
         chunk_id=pl.col("letter_id").cast(pl.Float64),
@@ -94,8 +107,14 @@ def chunk_and_tokenize_letters(df: pl.DataFrame) -> pl.DataFrame:
         .explode("new_rows")
         .unnest("new_rows")
     )
+    t2 = time.time()
+    print(f"{"*"*25}\nCompleted chunking and tokenization in {t2 - t1:.2f} seconds.")
     texts = df["markdown"].to_list()
     embeddings = encode(texts)
+    t3 = time.time()
+    print(f"{"*"*25}\nStart Embedding Process, using the {model_name} model...")
     df = df.with_columns(embedding=pl.Series(embeddings))
-
+    t4 = time.time()
+    print(f"{"*"*25}\nCompleted embedding process in {t4 - t3:.2f} seconds.")
+    
     return df
