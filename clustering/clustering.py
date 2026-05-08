@@ -100,7 +100,7 @@ def setup_clusters(
     soft_margin: float = 0.1,
     soft_assign: bool = True,
     iter: int = 0,
-) -> tuple[list[int], list[list[int]], np.ndarray, int]:
+) -> tuple[list[int], list[list[int]] | None, np.ndarray, int]:
     """
     Sets embeds into clusters based on cosine similarity to centroids.
 
@@ -112,7 +112,7 @@ def setup_clusters(
         soft_assign (bool): Whether to use soft assignment or hard assignment.
     Returns:
         embed_clust (list[int]): Hard assignment — best-matching cluster index for each embed (aligned to embeds).
-        soft_clusters (list[list[int]]): Soft membership — for each cluster, the list of embed indices assigned to it (may overlap).
+        soft_clusters (list[list[int]] | None): Soft membership per cluster (may overlap). None when soft_assign=False.
         centroid (np.ndarray): The final centroid array after convergence.
         iter (int): The number of iterations taken to converge.
     """
@@ -191,8 +191,8 @@ def setup_clusters(
     if iter == 100 or change_norm < threshold:
         # Hard assignment: best-matching cluster per point via argmax over similarities
         embed_clust: list[int] = np.argmax(sims, axis=1).tolist()
-        # Soft clusters: the accumulated overlap-aware membership lists
-        soft_clusters: list[list[int]] = clusters
+        # Soft clusters: the accumulated overlap-aware membership lists, or None if hard only
+        soft_clusters: list[list[int]] | None = clusters if soft_assign else None
         return embed_clust, soft_clusters, this_centroid, iter
     else:
         reset_clusters = [[] for _ in range(len(centroid))]
@@ -263,7 +263,7 @@ def estimate_num_clusters(embeddings: np.ndarray, sample_size: int = 1000) -> in
         int: Estimated number of clusters.
     """
     n = embeddings.shape[0]
-    cube_root_k = max(2, round(n ** (1 / 3)))
+    cube_root_k = max(2, round(n ** (1 / 3)) * 2)
 
     # Sample if n exceeds sample_size, otherwise use all
     if n > sample_size:
@@ -290,8 +290,8 @@ def estimate_num_clusters(embeddings: np.ndarray, sample_size: int = 1000) -> in
     eigenvalues = np.linalg.eigvalsh(L_sym)
     eigenvalues = np.sort(eigenvalues)
 
-    # Find the largest gap between consecutive eigenvalues in range [2, cube_root_k * 3]
-    max_search = min(cube_root_k * 3, len(eigenvalues) - 1)
+    # Find the largest gap between consecutive eigenvalues in range [2, cube_root_k * 2]
+    max_search = min(cube_root_k * 2, len(eigenvalues) - 1)
     gaps = np.diff(eigenvalues[1 : max_search + 1])
     eigenvalue_gap_k = int(np.argmax(gaps)) + 2  # +2: 0-index offset + gap->count
 
@@ -313,9 +313,9 @@ def create_cluster(
 
     Returns:
         tuple:
-            - embed_clust (list[int]): Hard assignment — best cluster index per embed.
-            - soft_clusters (list[list[int]]): Soft membership lists per cluster (may overlap).
-            - representative_samples (list[list[int]]): Top-10 most representative embed indices per cluster.
+            - embed_clust (list[int]): Hard assignment — best cluster index per embed (aligned to embeds).
+            - soft_membership (list[list[int]] | None): Per-embed list of all cluster indices it was soft-assigned to (aligned to embeds). None when soft_assign=False.
+            - representative_samples (list[list[int]]): 10 samples per cluster (7 most representative + 3 random).
             - iters (int): Number of iterations to convergence.
     """
     # Normalize the embedded vectors
@@ -343,4 +343,13 @@ def create_cluster(
         arr, embed_clust, new_centroids
     )
 
-    return embed_clust, soft_clusters, representative_samples, iters
+    # Invert soft_clusters (cluster-indexed) to soft_membership (embed-indexed)
+    if soft_clusters is not None:
+        soft_membership: list[list[int]] | None = [[] for _ in range(len(arr))]
+        for cluster_idx, members in enumerate(soft_clusters):
+            for embed_idx in members:
+                soft_membership[embed_idx].append(cluster_idx)
+    else:
+        soft_membership = None
+
+    return embed_clust, soft_membership, representative_samples, iters
