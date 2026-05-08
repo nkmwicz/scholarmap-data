@@ -3,7 +3,6 @@ import numpy as np
 from openai import OpenAI
 import os
 import dotenv
-from sklearn.cluster import SpectralClustering
 
 dotenv.load_dotenv()
 
@@ -235,13 +234,63 @@ def return_representative_samples(embeds, clusters, centroids):
     return representat_samples
 
 
-def create_cluster(embed_list, num_clusters=10, soft_assign=True, soft_margin=0.1):
+def estimate_num_clusters(embeddings: np.ndarray, sample_size: int = 1000) -> int:
     """
-    Create clusters from embedded
+    Estimate the number of clusters using the eigenvalue gap of the normalized
+    Laplacian, with the cube root of n as a minimum.
+
+    Parameters:
+        embeddings (np.ndarray): The embedded vectors, shape (n, d).
+        sample_size (int): Max vectors to use; randomly sampled if n exceeds this.
+    Returns:
+        int: Estimated number of clusters.
+    """
+    n = embeddings.shape[0]
+    cube_root_k = max(2, round(n ** (1 / 3)))
+
+    # Sample if n exceeds sample_size, otherwise use all
+    if n > sample_size:
+        rng = np.random.default_rng(42)
+        indices = rng.choice(n, size=sample_size, replace=False)
+        X = embeddings[indices]
+    else:
+        X = embeddings
+
+    Xn = normalize_rows(X.astype(np.float64, copy=False))
+
+    # Affinity matrix: cosine similarity clipped to [0, 1]
+    A = Xn @ Xn.T
+    np.clip(A, 0, 1, out=A)
+    np.fill_diagonal(A, 0.0)
+
+    # Normalized Laplacian: L = I - D^{-1/2} A D^{-1/2}
+    degree = A.sum(axis=1)
+    degree = np.maximum(degree, 1e-10)
+    d_inv_sqrt = 1.0 / np.sqrt(degree)
+    L_sym = np.eye(len(X)) - (d_inv_sqrt[:, None] * A * d_inv_sqrt[None, :])
+
+    # eigvalsh is faster and more stable than eig for symmetric matrices
+    eigenvalues = np.linalg.eigvalsh(L_sym)
+    eigenvalues = np.sort(eigenvalues)
+
+    # Find the largest gap between consecutive eigenvalues in range [2, cube_root_k * 3]
+    max_search = min(cube_root_k * 3, len(eigenvalues) - 1)
+    gaps = np.diff(eigenvalues[1 : max_search + 1])
+    eigenvalue_gap_k = int(np.argmax(gaps)) + 2  # +2: 0-index offset + gap->count
+
+    return max(cube_root_k, eigenvalue_gap_k)
+
+
+def create_cluster(
+    embed_list, num_clusters: int | None = None, soft_assign=True, soft_margin=0.1
+):
+    """
+    Create clusters from embedded vectors.
 
     Parameters:
         embed_list (list): The list of embedded vectors.
-        num_clusters (int): The number of clusters.
+        num_clusters (int | None): The number of clusters. If None, estimated automatically
+            using the eigenvalue gap method with cube root of n as a minimum.
         soft_assign (bool): Whether to use soft assignment or hard assignment.
         soft_margin (float): The margin for soft assignment.
 
@@ -255,23 +304,20 @@ def create_cluster(embed_list, num_clusters=10, soft_assign=True, soft_margin=0.
     else:
         arr = arr.astype(np.float64, copy=False)
 
+    if num_clusters is None:
+        num_clusters = estimate_num_clusters(arr)
+        print(f"  Estimated number of clusters: {num_clusters}")
+
     # create random cluster centroid for first iteration
     centroids_idx, centroids = kmeans_plus_plus_init(
         arr, num_clusters, random_state=42, return_indices=True
     )
     centroids = [centroids]
-    average_cent_dist_change = np.inf
     groups = [[] for _ in range(num_clusters)]
-    min_dist = 1e-6
 
     clusters, new_centroids, iters = setup_clusters(
         centroids, arr, groups, soft_assign=soft_assign, soft_margin=soft_margin, iter=0
     )
     representative_samples = return_representative_samples(arr, clusters, new_centroids)
-    # while average_cent_dist_change > min_dist:
-    # assign points to nearest centroid
-    # clusters = [
-    #     np.mean(arr_norm[grp], axis=0) for grp in groups
-    # ]  # these clusters aren't normalized?
 
     return clusters, representative_samples, iters
