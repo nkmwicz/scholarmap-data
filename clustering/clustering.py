@@ -204,7 +204,7 @@ def setup_clusters(
         new_centers: list[np.ndarray] = [np.mean(Xn[grp], axis=0) for grp in clusters]
 
     centroids_list = list(centroids_list)
-    centroids_list.append(new_centers)
+    centroids_list.append(np.array(new_centers))
 
     last_two = centroids_list[-2:]
 
@@ -278,9 +278,6 @@ def create_cluster(embed_list, num_clusters=10, soft_assign=True, soft_margin=0.
         arr = np.array(list(arr), dtype=np.float64)
     else:
         arr = arr.astype(np.float64, copy=False)
-
-    # Reduce dimensions for clustering
-    # arr = reduce_dimensions(arr, n_components=50)
 
     # create random cluster centroid for first iteration
     centroids_idx, centroids = kmeans_plus_plus_init(
