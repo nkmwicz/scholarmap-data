@@ -116,7 +116,7 @@ def kmeans_plus_plus_init(
 
 # def assign_similarities()
 def setup_clusters(
-    centroids: np.ndarray,
+    centroids: list[np.ndarray],
     embeds: np.ndarray,
     clusters: list[list[int]],
     soft_margin: float = 0.1,
@@ -127,28 +127,28 @@ def setup_clusters(
     Sets embeds into clusters based on cosine similarity to centroids.
 
     Parameters:
-        centroids (np.ndarray): The cluster centroids.
+        centroids (list[np.ndarray]): History of centroid arrays; the last entry (centroid) is used for the current iteration.
         embeds (np.ndarray): The embedded vectors.
         clusters (list[list]): The list of clusters to populate. A list for each cluster.
         soft_margin (float): The margin for soft assignment.
         soft_assign (bool): Whether to use soft assignment or hard assignment.
     Returns:
         embed_clust (list[int]): The list of clusters (0-k clusters) for each embed. Align to embeds.
-        centroids (np.ndarray): The final centroids after clustering.
+        centroid (np.ndarray): The final centroid array after convergence.
         iter (int): The number of iterations taken to converge.
     """
     centroids_list = centroids
-    centroids = centroids_list[-1]
+    centroid = centroids_list[-1]
     X = embeds.astype(np.float64, copy=False)
     Xn = normalize_rows(X)
-    C = centroids.astype(np.float64, copy=False)
+    C = centroid.astype(np.float64, copy=False)
     sims = Xn @ C.T  # cosine similarity
     # max_sim_indices = np.argmax(sims, axis=1)
 
     if soft_assign:
         best_sim = np.max(sims, axis=1).reshape(-1, 1)  # gets values
         # soft assignment within margin
-        sim_diffs = np.diff(np.sort(sims, axis=1), axis=1)
+        sim_diffs = np.diff(np.sort(sims, axis=1), axis=1).astype(np.float64)
         marg_num = (1 - soft_margin) * 100
         print(marg_num)
         margin = np.percentile(sim_diffs, marg_num)
@@ -166,8 +166,6 @@ def setup_clusters(
             exclusive_clust = clust_set - set().union(*other_clust_sets)
             exclusive_clusters.append(list(exclusive_clust))
 
-        new_centers: list[np.ndarray] = []
-        # new_centers = np.array([np.mean(Xn[grp], axis=0) for grp in exclusive_clusters])
         new_centers: list[np.ndarray] = []
         for idx, (exclusive_grp, all_grp) in enumerate(
             zip(exclusive_clusters, clusters)
@@ -221,8 +219,7 @@ def setup_clusters(
                 embed_clust[clus] = idx
         return embed_clust, this_centroid, iter
     else:
-        reset_clusters = [[] for _ in range(len(centroids))]
-        centroids_list = np.array(centroids_list)
+        reset_clusters = [[] for _ in range(len(centroid))]
         iter += 1
         return setup_clusters(
             centroids_list,
