@@ -345,6 +345,7 @@ def create_cluster(
     num_clusters: int | None = None,
     soft_assign: bool = True,
     n_restarts: int = 10,
+    run_num: int = 0,
 ):
     """
     Create clusters from embedded vectors, using multiple random restarts to
@@ -358,6 +359,9 @@ def create_cluster(
             Margin and per-document cap are computed dynamically (see setup_clusters).
         n_restarts (int): Number of independent runs with different random seeds.
             The run with the highest mean intra-cluster cosine similarity is returned.
+        run_num (int): Run number, used to offset the seed range for stability testing.
+            Seeds used will be [run_num * n_restarts, ..., run_num * n_restarts + n_restarts - 1].
+            run_num=0 uses seeds 0–9, run_num=1 uses seeds 10–19, etc.
 
     Returns:
         tuple:
@@ -382,7 +386,8 @@ def create_cluster(
     best_score: float = -np.inf
     best_result: tuple | None = None
 
-    for seed in range(n_restarts):
+    seed_offset = run_num * n_restarts
+    for seed in range(seed_offset, seed_offset + n_restarts):
         centroids_idx, centroids = kmeans_plus_plus_init(
             arr, num_clusters, random_state=seed, return_indices=True
         )
@@ -393,7 +398,9 @@ def create_cluster(
         )
 
         score = _score_clustering(embed_clust, new_centroids, Xn)
-        print(f"  Restart {seed + 1}/{n_restarts} — score: {score:.4f}")
+        print(
+            f"  Restart {seed - seed_offset + 1}/{n_restarts} (seed {seed}) — score: {score:.4f}"
+        )
 
         if score > best_score:
             best_score = score
