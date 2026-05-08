@@ -302,28 +302,3 @@ def create_cluster(embed_list, num_clusters=10, soft_assign=True, soft_margin=0.
     # ]  # these clusters aren't normalized?
 
     return clusters, representative_samples, iters
-
-
-def spectral_clusters(embeddings, n_clusters=10, random_state=42):
-    """
-    Create clusters using spectral clustering.
-
-    Parameters:
-        embeddings (list): The list of embedded vectors.
-        n_clusters (int): The number of clusters.
-
-    Returns:
-        labels (np.ndarray): The cluster labels for each embedding.
-    """
-
-    embeddings = reduce_dimensions(embeddings, n_components=50)
-
-    X = np.asarray(embeddings, dtype=np.float64)
-    spectral = SpectralClustering(
-        n_clusters=n_clusters,
-        affinity="nearest_neighbors",
-        assign_labels="kmeans",
-        random_state=random_state,
-    )
-    labels = spectral.fit_predict(X)
-    return labels
