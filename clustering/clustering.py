@@ -27,27 +27,6 @@ def embed_items(texts):
     return [data.embedding for data in response.data]
 
 
-def reduce_dimensions(embeddings, n_components=50, random_state=42):
-    """
-    Reduce the dimensionality of embeddings using UMAP
-    Parameters:
-        embeddings (list): The list of embedded vectors.
-        n_components (int): The number of dimensions to reduce to.
-
-    Returns:
-        reduced_embeddings (np.ndarray): The reduced dimensionality embeddings.
-    """
-    reducer = umap.UMAP(
-        n_components=n_components,
-        random_state=random_state,
-        metric="cosine",
-        min_dist=0.1,
-        n_neighbors=15,
-    )
-    X_reducer = reducer.fit_transform(embeddings)
-    return X_reducer
-
-
 def normalize_rows(mat, eps=1e-10):
     """
     Normalize the rows of a matrix.
