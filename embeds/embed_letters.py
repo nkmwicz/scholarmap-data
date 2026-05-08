@@ -8,6 +8,11 @@ def word_len(s: str):
     return len(s.split())
 
 
+_model = SentenceTransformer(
+    "ibm-granite/granite-embedding-97m-multilingual-r2", device="cuda"
+)
+
+
 def encode(sentences: List[str]) -> List[List[float]]:
     """
     Generate embeddings for a list of sentences using the IBM Granite embedding model.
@@ -18,9 +23,8 @@ def encode(sentences: List[str]) -> List[List[float]]:
         List[List[float]]: A list of embeddings, where each embedding is a list of floats.
 
     """
-    model = SentenceTransformer("ibm-granite/granite-embedding-97m-multilingual-r2")
 
-    embeddings = model.encode(sentences)
+    embeddings = _model.encode(sentences, batch_size=8, show_progress_bar=True)
     return embeddings.tolist()
 
 
@@ -35,12 +39,14 @@ def explode_chunk_text(row):
         A list of rows, where each row is a dictionary containing the chunked text and its metadata
     """
     md = row["markdown"]
-    n_tokens = row["token_length"]
+    row["word_length"] = word_len(md)
     id = row["letter_id"]
-    max_tokens = 2000
-    if n_tokens > max_tokens:
+    row["full_markdown"] = md
+    row["chunk_id"] = id + 0.0
+    max_words = 2000
+    if row["word_length"] > max_words:
         text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=max_tokens,
+            chunk_size=max_words,
             chunk_overlap=200,
             length_function=word_len,
             separators=["\n\n", "\n", " ", ""],
@@ -51,15 +57,14 @@ def explode_chunk_text(row):
             new_row = row.copy()
             new_row["full_markdown"] = md
             new_row["markdown"] = chunk
-            new_row["token_length"] = word_len(chunk)
+            new_row["word_length"] = word_len(chunk)
             new_row["chunk_id"] = id + i / 10
-            new_row["letter_id"] = id
             new_rows.append(new_row)
         return new_rows
     return [row]
 
 
-def chunk_and_tokenize(df: pl.DataFrame) -> pl.DataFrame:
+def chunk_and_tokenize_letters(df: pl.DataFrame) -> pl.DataFrame:
     """
     Check the token length of the OCR results to ensure they are within the limits for embedding generation. This function can be used to identify any pages that may need to be split or truncated before generating embeddings.
 
@@ -72,7 +77,7 @@ def chunk_and_tokenize(df: pl.DataFrame) -> pl.DataFrame:
     df = df.with_row_index("letter_id", offset=10000)
     df = df.with_columns(
         chunk_id=pl.col("letter_id").cast(pl.Float64),
-        token_length=pl.lit(0).cast(pl.Int64),
+        word_length=pl.lit(0).cast(pl.Int64),
         full_markdown=pl.lit("").cast(pl.Utf8),
     )
     df = (
