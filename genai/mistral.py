@@ -59,7 +59,7 @@ You understand that 16th-century orthography is inconsistent and focus on the un
         samples = "---\n---\n".join(cluster.tags)
         prompt = f"""
 Examine these 10 representative samples from a specific cluster. 
-Identify the 'semantic glue'—the shared motifs, social registers, or specific historical concerns—that defines this group. Each label should strive to be one word or three words at maximum, and should capture a distinct aspect of the cluster's identity that crosses all samples.
+Identify the 'semantic glue'—the shared motifs, social registers, or specific historical concerns—that defines this group. Each label should strive to be one word or three words at maximum (use CamelCase), and should capture a distinct aspect of the cluster's identity that crosses all samples.
 
 GUIDELINES FOR LABELS:
 - **Avoid Anachronism:** Use period-appropriate terminology (e.g., 'Natural Philosophy' instead of 'Science').
