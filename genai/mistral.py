@@ -70,12 +70,7 @@ GUIDELINES FOR LABELS:
 SAMPLES:
 {samples}
 
-Return the labels in a JSON object with keys 'label1' through 'label5' representing:
-1. The Primary Subject Matter (e.g., Diplomacy, Domestic Affairs, French Wars of Religion)
-2. The Social or Professional Register (e.g., Diplomatic, Private, Scholarly)
-3. A Key Historical Concept or Concern (e.g., France, Religion, Trade, Natural Philosophy)
-4. A Recurring Motif or Keyword (e.g., 'letter of credit', 'property dispute', 'philosophical argument')
-5. An Interpretive Angle or Analytical Lens (e.g., 'power dynamics', 'gender roles', 'economic networks')
+
 """
 
         messages = [
