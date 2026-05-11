@@ -57,11 +57,26 @@ You understand that 16th-century orthography is inconsistent and focus on the un
 
     for cluster in clusters:
         samples = "---\n---\n".join(cluster.tags)
-        prompt = f"""Generate 5 labels (single words or short phrases) that describe the main topic / idea that holds these documents together in the cluster. These texts are representative of the contents of a cluster of texts. The labels should be descriptive of the main ideas in the cluster, and should be concise. The labels should be different from each other. The labels should be relevant to the contents of the cluster.:
+        prompt = f"""
+Examine these 10 representative samples from a specific cluster. 
+Identify the 'semantic glue'—the shared motifs, social registers, or specific historical concerns—that defines this group. Each label should strive to be one word or three words at maximum, and should capture a distinct aspect of the cluster's identity that crosses all samples.
 
+GUIDELINES FOR LABELS:
+- **Avoid Anachronism:** Use period-appropriate terminology (e.g., 'Natural Philosophy' instead of 'Science').
+- **Be Specific:** Instead of 'Law', use 'Chancery Litigation' or 'Property Dispute'.
+- **Differentiate:** Each of the 5 labels should provide a unique angle (Subject, Tone, Actors, or Context).
+- **Ignore Noise:** Disregard standard epistolary formulas (e.g., 'your humble servant') unless they define the cluster's formal register.
+
+SAMPLES:
 {samples}
 
-Return the labels in a JSON object with keys 'label1', 'label2', 'label3', 'label4', and 'label5'."""
+Return the labels in a JSON object with keys 'label1' through 'label5' representing:
+1. The Primary Subject Matter (e.g., Diplomacy, Domestic Affairs, French Wars of Religion)
+2. The Social or Professional Register (e.g., Diplomatic, Private, Scholarly)
+3. A Key Historical Concept or Concern (e.g., France, Religion, Trade, Natural Philosophy)
+4. A Recurring Motif or Keyword (e.g., 'letter of credit', 'property dispute', 'philosophical argument')
+5. An Interpretive Angle or Analytical Lens (e.g., 'power dynamics', 'gender roles', 'economic networks')
+"""
 
         messages = [
             {"role": "system", "content": system_prompt},
