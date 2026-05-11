@@ -112,10 +112,10 @@ def setup_clusters(
             best and second-best cluster similarity across all points. Each document is capped
             at max(1, k // 4) cluster memberships.
     Returns:
-        embed_clust (list[int]): Hard assignment — best-matching cluster index for each embed (aligned to embeds).
-        soft_clusters (list[list[int]] | None): Soft membership per cluster (may overlap). None when soft_assign=False.
-        centroid (np.ndarray): The final centroid array after convergence.
-        iter (int): The number of iterations taken to converge.
+        - embed_clust (list[int]): Hard assignment — best-matching cluster index for each embed (aligned to embeds).
+        - soft_clusters (list[list[int]] | None): Soft membership per cluster (may overlap). None when soft_assign=False.
+        - centroid (np.ndarray): The final centroid array after convergence.
+        - iter (int): The number of iterations taken to converge.
     """
     centroids_list = centroids
     centroid = centroids_list[-1]
@@ -367,7 +367,7 @@ def create_cluster(
         tuple:
             - embed_clust (list[int]): Hard assignment — best cluster index per embed (aligned to embeds).
             - soft_membership (list[list[int]] | None): Per-embed list of all cluster indices it was soft-assigned to (aligned to embeds). None when soft_assign=False.
-            - representative_samples (list[list[int]]): 10 samples per cluster (7 most representative + 3 random).
+            - representative_samples (list[list[int]]): 10 samples per cluster (7 most representative + 3 random) ordered according to their representative cluster. Ints represent the indices of the sample vectors.
             - iters (int): Number of iterations to convergence for the best run.
     """
     # Normalize the embedded vectors
