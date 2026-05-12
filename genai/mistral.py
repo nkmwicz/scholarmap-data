@@ -3,19 +3,9 @@ from typing import List
 from mistralai.client import Mistral
 from dotenv import load_dotenv
 from pydantic import BaseModel
+import time
 
 load_dotenv()
-
-api_key = os.environ["MISTRAL_KEY"]
-MODEL_ID = "mistral-large-latest"
-
-client = Mistral(api_key=api_key)
-messages = [
-    {
-        "role": "user",
-        "content": "What is the best French meal? Return the name and the ingredients in short JSON object.",
-    }
-]
 
 
 class Cluster(BaseModel):
@@ -36,9 +26,9 @@ class ClusterGeminiModel(BaseModel):
     label5: str
 
 
-def get_gemini_cluster_tags(clusters: List[Cluster]) -> List[ClusterWithTags]:
+def get_mistral_cluster_tags(clusters: List[Cluster]) -> List[ClusterWithTags]:
     """
-    Given a list of clusters, generate 5 tags for each cluster using the Gemini model.
+    Given a list of clusters, generate 5 tags for each cluster using the Mistral model.
 
     Args:
         clusters (List[Cluster]): A list of Cluster objects, each containing a label and a list of tags.
@@ -48,7 +38,18 @@ def get_gemini_cluster_tags(clusters: List[Cluster]) -> List[ClusterWithTags]:
         label and the generated tags.
 
     """
+    delay = 60  # Delay in seconds between API calls to avoid rate limits
+    api_key = os.environ["MISTRAL_KEY"]
+    # MODEL_ID = "mistral-large-latest"
+    # MODEL_ID = "mistral-small-latest"
+    MODEL_ID = "mistral-small-latest"
+    # MODEL_ID = "mistral-3b-latest"
+
+    client = Mistral(api_key=api_key)
     cluster_response: List[ClusterWithTags] = []
+    print(
+        f"Using Mistral model: {MODEL_ID}. Instituting a delay of {delay} seconds between API calls to avoid rate limits."
+    )
 
     system_prompt: str = """You are an expert Early Modern historian specializing in the sixteenth and seventeenth centuries. 
 You are skilled at Paleography and the analysis of Early Modern rhetorical structures. 
@@ -72,20 +73,37 @@ SAMPLES:
 
 
 """
-
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {
-                "role": "user",
-                "content": prompt,
-            },
-        ]
-        chat_response = client.chat.parse(
-            model=MODEL_ID,
-            messages=messages,
-            response_format=ClusterGeminiModel,
-        )
-        tags: ClusterGeminiModel = chat_response.choices[0].message.parsed
-        tags_list = [tags.label1, tags.label2, tags.label3, tags.label4, tags.label5]
-        cluster_response.append(ClusterWithTags(label=cluster.label, tags=tags_list))
+        success = False
+        retries = 0
+        while not success and retries < 3:
+            try:
+                messages = [
+                    {"role": "system", "content": system_prompt},
+                    {
+                        "role": "user",
+                        "content": prompt,
+                    },
+                ]
+                chat_response = client.chat.parse(
+                    model=MODEL_ID,
+                    messages=messages,
+                    response_format=ClusterGeminiModel,
+                )
+                tags: ClusterGeminiModel = chat_response.choices[0].message.parsed
+                tags_list = [
+                    tags.label1,
+                    tags.label2,
+                    tags.label3,
+                    tags.label4,
+                    tags.label5,
+                ]
+                cluster_response.append(
+                    ClusterWithTags(label=cluster.label, tags=tags_list)
+                )
+                time.sleep(delay)  # Add a delay to avoid overwhelming the API
+                success = True
+            except Exception as e:
+                print(f"Error occurred while processing cluster {cluster.label}: {e}")
+                retries += 1
+                time.sleep(delay)  # Wait before retrying
     return cluster_response
