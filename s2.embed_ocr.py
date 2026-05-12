@@ -15,7 +15,6 @@ EXPECTED_SCHEMA = {
     "id": pl.UInt32,
     "title": pl.Utf8,
     "pdf_pages": pl.List(pl.Int64),
-    "book_pages": pl.List(pl.Utf8),
     "markdown": pl.Utf8,
 }
 
@@ -87,7 +86,8 @@ if choice != "Overwrite":
     sys.exit(0)
 
 try:
-    df = df.with_row_index("id", offset=10000)
+    if "id" not in df.columns:
+        df = df.with_row_index("id", offset=10000)
     df = chunk_and_tokenize_letters(df)
     df.write_parquet(processed_parquet)
     print(f"\n✓ Done! Embeddings saved to {processed_parquet}")
