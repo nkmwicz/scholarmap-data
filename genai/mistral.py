@@ -42,7 +42,7 @@ def get_mistral_cluster_tags(
         label and the generated tags.
 
     """
-    delay = 60  # Delay in seconds between API calls to avoid rate limits
+    delay = 20  # Delay in seconds between API calls to avoid rate limits
     api_key = os.environ["MISTRAL_KEY"]
     # MODEL_ID = "mistral-large-latest"
     # MODEL_ID = "mistral-small-latest"
@@ -55,8 +55,8 @@ def get_mistral_cluster_tags(
         f"Using Mistral model: {MODEL_ID}. Instituting a delay of {delay} seconds between API calls to avoid rate limits."
     )
 
-    system_prompt: str = """You are an expert Early Modern historian specializing in the sixteenth and seventeenth centuries. 
-You are skilled at Paleography and the analysis of Early Modern rhetorical structures. 
+    system_prompt: str = """You are an forensic historian. 
+
 Your goal is to synthesize clusters of text fragments (letters, book chunks, and manuscripts) grouped by semantic vector similarity.
 You understand that 16th-century orthography is inconsistent and focus on the underlying semantic 'intent' and 'domain' (e.g., juridical, domestic, theological, or mercantile)."""
 
@@ -64,24 +64,30 @@ You understand that 16th-century orthography is inconsistent and focus on the un
         samples = "---\n---\n".join(cluster.tags)
         if is_sub_cluster:
             prompt = f"""
-Examine these representative samples from a specific cluster. Return 5 labels that capture the 'semantic glue' that defines this group, but also situate it within the larger parent cluster.  
+EXPERT ROLE: You are a Forensic Paleographer and Strategic Analyst of Early Modern Statecraft. 
+Your goal is to identify the 'Strategic Signal' within this sub-cluster, specifically how it diverges from the Parent Cluster themes.
 
-This group is a sub-cluster of a larger parent cluster defined by the following labels: 
+PARENT CLUSTER CONTEXT: 
+The high-level semantic domain is: {parent_cluster_labels}.
 
-- {parent_cluster_labels}.
+TASK:
+Examine the provided samples. Identify 5 labels (CamelCase, max 3 words) that define the 'Internal Variance'. 
+What makes these specific documents a 'island' within the larger '{parent_cluster_labels}' sea?
 
-You need to find the the shared motifs, social registers, or specific historical concerns that make this group of samples distinct within the parent cluster. 
+STRICT NEGATIVE CONSTRAINTS:
+1. DO NOT REPEAT PARENT LABELS: If the parent is 'Diplomacy', the sub-label must be more granular (e.g., 'EspionageLogistics').
+2. NO HALLUCINATIONS: Do not assume a 'Religious' or 'Papal' theme just because you see a Bishop or Cardinal. Look at what they are DOING (e.g., are they arresting someone, or asking for money?).
+3. IGNORE BOLOGNA/BOILERPLATE: 16th-century letters are 80% formal address. Ignore the 'Your Humble Servant' and 'Most Christian King' noise. Look for the 'News' in the middle.
 
-Each label should strive to be one word or three words at maximum (use CamelCase), and should capture a distinct aspect of the sub-cluster's identity that crosses all samples.
-
-GUIDELINES FOR LABELS:
-
-- **Focus on Specific Commonalities:** Are there central people (e.g., 'JohnDoe'), places (e.g., 'London', 'Rome', 'OttomanEmpire'), events (e.g., 'FrenchWarsOfReligion'), or institutions (e.g., 'Parlement') that tie this sub-cluster together?
-- **Differentiate:** Each of the 5 labels should provide a unique angle (People, places, things, events) that appear to be a substratum of the parent cluster lables.
-- **Ignore Noise:** Disregard standard epistolary formulas (e.g., 'your humble servant') unless they define the cluster's formal register.
+REQUIRED LABEL DIMENSIONS:
+Provide one label for each of these forensic angles:
+1. PRIMARY AGENT/ENTITY: Who is the actual driver of this specific group? (e.g., 'HenryVIII', 'ThomasCromwell', 'EnglishParliament').
+2. GEOGRAPHIC ANCHOR: Is there a specific border, city, or front? (e.g., 'EnglishChannel', 'PiedmontFrontier', 'ArdresFortifications').
+3. FUNCTIONAL ACTION: What is the 'verb' of this cluster? (e.g., 'ExtraditionRequest', 'PatronageIntercession', 'BorderSecurity').
+4. MOTIF/CONCERN: What is the recurring strategic anxiety? (e.g., 'ImperialWedge', 'FinancialIndigence', 'SuccessionConspiracy').
+5. SOCIAL REGISTER: What is the nature of the power dynamic? (e.g., 'VassalReporting', 'SpyIntelligence', 'MinisterialRivalry').
 
 SAMPLES:
-
 {samples}
             """
         else:
