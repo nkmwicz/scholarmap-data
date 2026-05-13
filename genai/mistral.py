@@ -64,7 +64,7 @@ You understand that 16th-century orthography is inconsistent and focus on the un
         samples = "---\n---\n".join(cluster.tags)
         if is_sub_cluster:
             prompt = f"""
-Examine these 10 representative samples from a specific cluster. Return 5 labels that capture the 'semantic glue' that defines this group, but also situate it within the larger parent cluster.  
+Examine these representative samples from a specific cluster. Return 5 labels that capture the 'semantic glue' that defines this group, but also situate it within the larger parent cluster.  
 
 This group is a sub-cluster of a larger parent cluster defined by the following labels: 
 
@@ -86,7 +86,7 @@ SAMPLES:
             """
         else:
             prompt = f"""
-Examine these 10 representative samples from a specific cluster. Return 5 labels that capture the 'semantic glue' that defines this group.
+Examine theserepresentative samples from a specific cluster. Return 5 labels that capture the 'semantic glue' that defines this group.
 
 Identify the 'semantic glue'—the shared motifs, social registers, or specific historical concerns—that defines this group. Each label should strive to be one word or three words at maximum (use CamelCase), and should capture a distinct aspect of the sub-cluster's identity that crosses all samples.
 
