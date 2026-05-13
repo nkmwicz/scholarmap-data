@@ -1,4 +1,6 @@
 import random
+import polars as pl
+from typing import List, Union
 import numpy as np
 from openai import OpenAI
 import os
@@ -424,3 +426,184 @@ def create_cluster(
         soft_membership = None
 
     return embed_clust, soft_membership, representative_samples, iters
+
+
+def recommend_subclustering(
+    vector_series: Union[pl.Series, np.ndarray], cluster_label: str = "Unknown"
+) -> bool:
+    """
+    Recommend sub-clustering by accepting a Polars Series of vectors or a 2D NumPy array.
+    """
+    # 1. Convert Polars Series to 2D NumPy array
+    if isinstance(vector_series, pl.Series):
+        # .to_list() followed by np.array() is the most reliable way to
+        # turn a Series of lists into a 2D matrix (N, D).
+        vectors = np.array(vector_series.to_list())
+    else:
+        vectors = vector_series
+
+    # Check for empty or too small clusters
+    if vectors.shape[0] < 10:
+        print(f"  Cluster {cluster_label}: Too small for sub-clustering analysis.")
+        return False
+
+    # 2. Compute Cosine Similarity Matrix
+    # We use linalg.norm with axis=1 on the proper 2D matrix
+    norms = np.linalg.norm(vectors, axis=1, keepdims=True)
+    Xn = vectors / (norms + 1e-9)
+    sims = Xn @ Xn.T
+
+    # 3. Extract unique pairwise similarities (Upper Triangle)
+    upper_tri_sims = sims[np.triu_indices_from(sims, k=1)]
+
+    mean_sim = np.mean(upper_tri_sims)
+    std_sim = np.std(upper_tri_sims)
+    median_sim = np.median(upper_tri_sims)
+
+    # Coefficient of Variation & Mean-Median Gap
+    cv = std_sim / mean_sim if mean_sim > 0 else 0
+    gap = abs(mean_sim - median_sim)
+
+    print(f"\nAnalysis for Cluster: {cluster_label}")
+    print(f"  Samples: {vectors.shape[0]}")
+    print(f"  Mean Similarity: {mean_sim:.4f}")
+    print(f"  Std Deviation:   {std_sim:.4f}")
+    print(f"  Coeff of Var:    {cv:.4f}")
+    print(f"  Mean-Med Gap:    {gap:.4f}")
+
+    # Lowering the bar because diplomatic archives are naturally high-similarity
+    should_subdivide = len(vectors) > 20 and (std_sim > 0.015 or gap > 0.0005)
+
+    if should_subdivide:
+        print(
+            "  >>> Recommendation: SUB-CLUSTER (Significant internal variance detected)"
+        )
+        return True
+    else:
+        print("  >>> Recommendation: KEEP (Cluster is cohesive or too small)")
+        return False
+
+
+def analyze_geometric_footprint(
+    vector_series: pl.Series, cluster_label: str = "Unknown"
+):
+    """
+    Analyzes the n-dimensional 'spread' of a cluster using SVD to determine
+    if it occupies enough 'conceptual volume' to warrant sub-clustering.
+    """
+    # 1. Prepare 2D Matrix (N samples x D dimensions)
+    X = np.array(vector_series.to_list())
+
+    # 2. Center the data (Geographic centering)
+    # This moves the cluster to the origin so we can measure the 'spread'
+    X_centered = X - np.mean(X, axis=0)
+
+    # 3. Singular Value Decomposition
+    # U: rotations, S: singular values (spread along axes), Vh: principal axes
+    U, S, Vh = np.linalg.svd(X_centered, full_matrices=False)
+
+    # 4. Calculate Explained Variance Ratio
+    # This tells us how much 'space' the cluster takes up on each axis
+    exp_var = (S**2) / np.sum(S**2)
+
+    # 5. Metrics for Decision Making
+    # Cumulative variance: How many dimensions to explain 80% of the cluster?
+    cum_var = np.cumsum(exp_var)
+    dims_to_80 = np.argmax(cum_var >= 0.80) + 1
+
+    # Sparsity: Ratio of the 1st component to the 2nd
+    # If the 1st component is 10x larger than the 2nd, it's a 'line' (don't sub-cluster)
+    anisotropy = S[0] / S[1] if len(S) > 1 else 0
+
+    print(f"\nGeometric Analysis: {cluster_label}")
+    print(f"  Total Samples: {X.shape[0]}")
+    print(f"  Dimensions to explain 80% variance: {dims_to_80}")
+    print(f"  Anisotropy (Axis 1 / Axis 2): {anisotropy:.2f}")
+
+    # RECOMMENDATION LOGIC:
+    # If a cluster is 'broad' (needs many dimensions to explain it),
+    # it occupies enough 'territory' for sub-clusters.
+    # threshold: if dims_to_80 > 5 and anisotropy < 3.0
+    is_broad = dims_to_80 > 5 and anisotropy < 3.0
+
+    if is_broad:
+        print("  >>> Recommendation: SUB-CLUSTER (Occupies broad conceptual territory)")
+        return True
+    else:
+        print("  >>> Recommendation: KEEP (Cluster is geometrically narrow/linear)")
+        return False
+
+
+def recommend_k(vector_series: pl.Series, cluster_label: str = "Unknown"):
+    # 1. Prepare and Center
+    X = np.array(vector_series.to_list())
+    X_centered = X - np.mean(X, axis=0)
+
+    # 2. Get Singular Values
+    _, S, _ = np.linalg.svd(X_centered, full_matrices=False)
+
+    # 3. Calculate "Energy" (Squared Singular Values)
+    # This represents the variance along each principal component
+    energy = S**2
+    total_energy = np.sum(energy)
+    var_ratio = energy / total_energy
+
+    # 4. HEURISTIC 1: The "Kaiser-like" Threshold
+    # Count how many components are 'stronger' than the average component.
+    # This is a classic way to find meaningful structure.
+    avg_energy = total_energy / len(S)
+    k_suggested_avg = np.sum(energy > avg_energy)
+
+    # 5. HEURISTIC 2: The 50% Coverage Rule
+    # For sub-clustering, we don't want to explain 80% (that's too many labels).
+    # Explaining 50-60% usually gives us the 'major' thematic pillars.
+    cum_var = np.cumsum(var_ratio)
+    k_suggested_50 = np.argmax(cum_var >= 0.50) + 1
+
+    # 6. Final Recommendation
+    # We take the average or the 50% mark, but cap it so it's useful for humans.
+    # Typically for a Scholarmap, you want between 2 and 6 sub-clusters.
+    final_k = int(np.clip(k_suggested_50, 2, 6))
+
+    print(f"\nSub-clustering Logic for {cluster_label}:")
+    print(f"  Total Dimensions available: {len(S)}")
+    print(f"  Significant Axes (> average): {k_suggested_avg}")
+    print(f"  Axes to reach 50% variance: {k_suggested_50}")
+    print(f"  >>> RECOMMENDED k: {final_k}")
+
+    return final_k
+
+
+def recommend_k_refined(vector_series: pl.Series, cluster_label: str = "Unknown"):
+    # 1. Convert and Normalize (Crucial for Cosine Similarity logic)
+    X = np.array(vector_series.to_list())
+    norms = np.linalg.norm(X, axis=1, keepdims=True)
+    X_normalized = X / (norms + 1e-9)  # Prevent division by zero
+
+    # 2. SVD on Normalized Data
+    # We don't center because we want to preserve the angular relationships
+    _, S, _ = np.linalg.svd(X_normalized, full_matrices=False)
+
+    # 3. Calculate Variance and "Gaps"
+    energy = S**2
+    var_ratio = energy / np.sum(energy)
+
+    # 4. HEURISTIC: Scree / Elbow Detection
+    # We look for where the drop in 'importance' levels off.
+    # This calculates the difference between consecutive energy levels.
+    gaps = np.diff(var_ratio)
+    # The most significant 'break' in the data structure
+    k_elbow = np.argmin(gaps) + 1
+
+    # 5. HEURISTIC: Cumulative Floor
+    # Ensure we explain at least a baseline of the structure
+    cum_var = np.cumsum(var_ratio)
+    k_min_threshold = np.argmax(cum_var >= 0.30) + 1
+
+    # 6. Final Decision Logic
+    # We prioritize the elbow but ensure it's not '1' (which is useless)
+    # and cap it for human interpretability (Scholarmap style).
+    suggested_k = max(k_elbow, k_min_threshold)
+    final_k = int(np.clip(suggested_k, 2, 6))
+
+    return final_k
