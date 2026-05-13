@@ -195,10 +195,21 @@ def setup_clusters(
                     # Last resort: keep current centroid
                     new_centers.append(C[idx])
     else:
-        best_sim = np.argmax(sims, axis=1)  # gets indices
+        best_sim = np.argmax(sims, axis=1)
         for idx, num in enumerate(best_sim):
             clusters[num].append(int(idx))
-        new_centers: list[np.ndarray] = [np.mean(Xn[grp], axis=0) for grp in clusters]
+
+        new_centers = []
+        for grp in clusters:
+            if len(grp) > 0:
+                # Compute mean, then immediately re-normalize to unit length
+                m = np.mean(Xn[grp], axis=0)
+                m_norm = m / (np.linalg.norm(m) + 1e-10)
+                new_centers.append(m_norm)
+            else:
+                # Handle empty clusters by picking a random point
+                # or keeping the old centroid to prevent collapse
+                new_centers.append(C[len(new_centers)])
 
     centroids_list = list(centroids_list)
     centroids_list.append(np.array(new_centers))
