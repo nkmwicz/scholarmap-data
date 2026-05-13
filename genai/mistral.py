@@ -42,11 +42,11 @@ def get_mistral_cluster_tags(
         label and the generated tags.
 
     """
-    delay = 20  # Delay in seconds between API calls to avoid rate limits
+    delay = 4  # Delay in seconds between API calls to avoid rate limits
     api_key = os.environ["MISTRAL_KEY"]
-    # MODEL_ID = "mistral-large-latest"
+    MODEL_ID = "mistral-large-latest"
     # MODEL_ID = "mistral-small-latest"
-    MODEL_ID = "mistral-small-latest"
+    # MODEL_ID = "mistral-small-latest"
     # MODEL_ID = "mistral-3b-latest"
 
     client = Mistral(api_key=api_key)
@@ -64,28 +64,29 @@ You understand that 16th-century orthography is inconsistent and focus on the un
         samples = "---\n---\n".join(cluster.tags)
         if is_sub_cluster:
             prompt = f"""
-EXPERT ROLE: You are a Forensic Paleographer and Strategic Analyst of Early Modern Statecraft. 
-Your goal is to identify the 'Strategic Signal' within this sub-cluster, specifically how it diverges from the Parent Cluster themes.
+ROLE: You are a Forensic Paleographer and Strategic Analyst of Early Modern Statecraft. 
+Your goal is to identify the commonalities between all provided samples that tie the subcluster together. What makes is specific WITHIN the Parent Cluster themes.
 
 PARENT CLUSTER CONTEXT: 
-The high-level semantic domain is: {parent_cluster_labels}.
+The high-level domain labels are as follows: {parent_cluster_labels}.
 
 TASK:
-Examine the provided samples. Identify 5 labels (CamelCase, max 3 words) that define the 'Internal Variance'. 
-What makes these specific documents a 'island' within the larger '{parent_cluster_labels}' sea?
+Examine the provided samples. Identify 5 labels (CamelCase, max 3 words) that define the . 
+What commonalities across all the samples make these specific documents distinct from the broader parent cluster? Why were these documents grouped together at the sub-cluster level, and what specific topical glue ties them together?
+Make sure the labels reflect all samples. These samples are representative of a broader sub-cluster, so the labels should not be specific to one or two documents, but all of them.
 
 STRICT NEGATIVE CONSTRAINTS:
-1. DO NOT REPEAT PARENT LABELS: If the parent is 'Diplomacy', the sub-label must be more granular (e.g., 'EspionageLogistics').
+1. DO NOT REPEAT PARENT LABELS: If the parent is 'Diplomacy', the sub-label must be more granular.
 2. NO HALLUCINATIONS: Do not assume a 'Religious' or 'Papal' theme just because you see a Bishop or Cardinal. Look at what they are DOING (e.g., are they arresting someone, or asking for money?).
-3. IGNORE BOLOGNA/BOILERPLATE: 16th-century letters are 80% formal address. Ignore the 'Your Humble Servant' and 'Most Christian King' noise. Look for the 'News' in the middle.
+3. IGNORE BOILERPLATE: 16th-century letters follow formal models. Ignore the 'Your Humble Servant' and 'Most Christian King' noise. Look for the 'News' in the middle.
 
-REQUIRED LABEL DIMENSIONS:
-Provide one label for each of these forensic angles:
-1. PRIMARY AGENT/ENTITY: Who is the actual driver of this specific group? (e.g., 'HenryVIII', 'ThomasCromwell', 'EnglishParliament').
-2. GEOGRAPHIC ANCHOR: Is there a specific border, city, or front? (e.g., 'EnglishChannel', 'PiedmontFrontier', 'ArdresFortifications').
-3. FUNCTIONAL ACTION: What is the 'verb' of this cluster? (e.g., 'ExtraditionRequest', 'PatronageIntercession', 'BorderSecurity').
-4. MOTIF/CONCERN: What is the recurring strategic anxiety? (e.g., 'ImperialWedge', 'FinancialIndigence', 'SuccessionConspiracy').
-5. SOCIAL REGISTER: What is the nature of the power dynamic? (e.g., 'VassalReporting', 'SpyIntelligence', 'MinisterialRivalry').
+GUIDELINES FOR LABELS:
+1. FIND THE PATTERNS: What specific concerns, people, geography or places, events, or topics hold these samples together?
+2. DIFFERENTIATE: Each of the 5 labels should capture a distinct angle (Subject, Tone, Actors, or Context).
+1. PRIMARY AGENT/ENTITY: Who is the actual driver of this specific group?
+2. GEOGRAPHIC ANCHOR: Is there a specific border, city, or front?
+3. SOCIAL REGISTER: What is the nature of the power dynamic? 
+4. MOTIF/CONCERN: What is the recurring strategic anxiety or optimism?
 
 SAMPLES:
 {samples}
