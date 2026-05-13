@@ -26,6 +26,18 @@ class ClusterGeminiModel(BaseModel):
     label5: str
 
 
+class LetterSummary(BaseModel):
+    author: str
+    author_location: str
+    recipient_location: str
+    recipient: str
+    date: str
+    summary: str
+    people_referenced: list[str]
+    places_referenced: list[str]
+    events_referenced: list[str]
+
+
 def get_mistral_cluster_tags(
     clusters: List[Cluster],
     is_sub_cluster: bool = False,
@@ -139,3 +151,58 @@ SAMPLES:
                 retries += 1
                 time.sleep(delay)  # Wait before retrying
     return cluster_response
+
+
+def get_mistral_summary(
+    text: str,
+) -> LetterSummary:
+    api_key = os.environ["MISTRAL_KEY"]
+    MODEL_ID = "mistral-large-latest"
+    client = Mistral(api_key=api_key)
+    system_prompt: str = (
+        """You are an early modern historian. Your task is to read the following letter and extract the key information about the letter's author, recipient, date, summary, and any people, places, or events referenced in the letter. The letter is written in 16th-century English and may contain archaic language and spelling. Focus on the underlying meaning and intent of the letter rather than getting caught up in the orthographic quirks of the period."""
+    )
+    prompt = f"""Read the following letter and extract the key information about the letter's author, recipient, date, summary, and any people, places, or events referenced in the letter. The letter is written in 16th-century English, French, Latin, Italian, or Turkish and may contain archaic language and spelling. Return the following informaiton:
+    
+1. Author: Who wrote the letter?
+2. Author Location: Where was the author located when they wrote the letter?
+3. Recipient: Who was the letter addressed to?
+4. Recipient Location: Where was the recipient located when they received the letter?
+5. Date: When was the letter written?
+6. Summary: What is the main point or purpose of the letter?
+7. People Referenced: List any people mentioned in the letter.
+8. Places Referenced: List any places mentioned in the letter.
+9. Events Referenced: List any events mentioned in the letter.
+
+LETTER:
+{text}
+    """
+
+    try:
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {
+                "role": "user",
+                "content": prompt,
+            },
+        ]
+        chat_response = client.chat.parse(
+            model=MODEL_ID,
+            messages=messages,
+            response_format=LetterSummary,
+        )
+        summary: LetterSummary = chat_response.choices[0].message.parsed
+        return summary
+    except Exception as e:
+        print(f"Error occurred while summarizing letter: {e}")
+        return LetterSummary(
+            author="",
+            author_location="",
+            recipient_location="",
+            recipient="",
+            date="",
+            summary="",
+            people_referenced=[],
+            places_referenced=[],
+            events_referenced=[],
+        )
