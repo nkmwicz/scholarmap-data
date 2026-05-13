@@ -26,7 +26,11 @@ class ClusterGeminiModel(BaseModel):
     label5: str
 
 
-def get_mistral_cluster_tags(clusters: List[Cluster]) -> List[ClusterWithTags]:
+def get_mistral_cluster_tags(
+    clusters: List[Cluster],
+    is_sub_cluster: bool = False,
+    parent_cluster_labels: str = "",
+) -> List[ClusterWithTags]:
     """
     Given a list of clusters, generate 5 tags for each cluster using the Mistral model.
 
@@ -58,9 +62,33 @@ You understand that 16th-century orthography is inconsistent and focus on the un
 
     for cluster in clusters:
         samples = "---\n---\n".join(cluster.tags)
-        prompt = f"""
-Examine these 10 representative samples from a specific cluster. 
-Identify the 'semantic glue'—the shared motifs, social registers, or specific historical concerns—that defines this group. Each label should strive to be one word or three words at maximum (use CamelCase), and should capture a distinct aspect of the cluster's identity that crosses all samples.
+        if is_sub_cluster:
+            prompt = f"""
+Examine these 10 representative samples from a specific cluster. Return 5 labels that capture the 'semantic glue' that defines this group, but also situate it within the larger parent cluster.  
+
+This group is a sub-cluster of a larger parent cluster defined by the following labels: 
+
+- {parent_cluster_labels}.
+
+You need to find the the shared motifs, social registers, or specific historical concerns that make this group of samples distinct within the parent cluster. 
+
+Each label should strive to be one word or three words at maximum (use CamelCase), and should capture a distinct aspect of the sub-cluster's identity that crosses all samples.
+
+GUIDELINES FOR LABELS:
+
+- **Focus on Specific Commonalities:** Are there central people (e.g., 'JohnDoe'), places (e.g., 'London', 'Rome', 'OttomanEmpire'), events (e.g., 'FrenchWarsOfReligion'), or institutions (e.g., 'Parlement') that tie this sub-cluster together?
+- **Differentiate:** Each of the 5 labels should provide a unique angle (People, places, things, events) that appear to be a substratum of the parent cluster lables.
+- **Ignore Noise:** Disregard standard epistolary formulas (e.g., 'your humble servant') unless they define the cluster's formal register.
+
+SAMPLES:
+
+{samples}
+            """
+        else:
+            prompt = f"""
+Examine these 10 representative samples from a specific cluster. Return 5 labels that capture the 'semantic glue' that defines this group.
+
+Identify the 'semantic glue'—the shared motifs, social registers, or specific historical concerns—that defines this group. Each label should strive to be one word or three words at maximum (use CamelCase), and should capture a distinct aspect of the sub-cluster's identity that crosses all samples.
 
 GUIDELINES FOR LABELS:
 - **Avoid Anachronism:** Use period-appropriate terminology (e.g., 'Natural Philosophy' instead of 'Science').
@@ -69,10 +97,10 @@ GUIDELINES FOR LABELS:
 - **Ignore Noise:** Disregard standard epistolary formulas (e.g., 'your humble servant') unless they define the cluster's formal register.
 
 SAMPLES:
+
 {samples}
+            """
 
-
-"""
         success = False
         retries = 0
         while not success and retries < 3:
