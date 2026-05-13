@@ -55,8 +55,7 @@ def get_mistral_cluster_tags(
         f"Using Mistral model: {MODEL_ID}. Instituting a delay of {delay} seconds between API calls to avoid rate limits."
     )
 
-    system_prompt: str = """You are an forensic historian. 
-
+    system_prompt: str = """
 Your goal is to synthesize clusters of text fragments (letters, book chunks, and manuscripts) grouped by semantic vector similarity.
 You understand that 16th-century orthography is inconsistent and focus on the underlying semantic 'intent' and 'domain' (e.g., juridical, domestic, theological, or mercantile)."""
 
@@ -64,14 +63,15 @@ You understand that 16th-century orthography is inconsistent and focus on the un
         samples = "---\n---\n".join(cluster.tags)
         if is_sub_cluster:
             prompt = f"""
-ROLE: You are a Forensic Paleographer and Strategic Analyst of Early Modern Statecraft. 
+The following samples come from representative documents from a specific sub-cluster of a parent cluster. Cosine similarity was used to group these documents together. 
+
 Your goal is to identify the commonalities between all provided samples that tie the subcluster together. What makes is specific WITHIN the Parent Cluster themes.
 
 PARENT CLUSTER CONTEXT: 
 The high-level domain labels are as follows: {parent_cluster_labels}.
 
 TASK:
-Examine the provided samples. Identify 5 labels (CamelCase, max 3 words) that define the . 
+Examine the provided samples. Identify 5 labels (CamelCase, max 3 words) that define the subcluster as a distincty entity within the parent cluster. 
 What commonalities across all the samples make these specific documents distinct from the broader parent cluster? Why were these documents grouped together at the sub-cluster level, and what specific topical glue ties them together?
 Make sure the labels reflect all samples. These samples are representative of a broader sub-cluster, so the labels should not be specific to one or two documents, but all of them.
 
@@ -79,12 +79,11 @@ STRICT NEGATIVE CONSTRAINTS:
 1. DO NOT REPEAT PARENT LABELS: If the parent is 'Diplomacy', the sub-label must be more granular.
 2. NO HALLUCINATIONS: Do not assume a 'Religious' or 'Papal' theme just because you see a Bishop or Cardinal. Look at what they are DOING (e.g., are they arresting someone, or asking for money?).
 3. IGNORE BOILERPLATE: 16th-century letters follow formal models. Ignore the 'Your Humble Servant' and 'Most Christian King' noise. Look for the 'News' in the middle.
+4. Do not become overly fixated on specific names that only occur in one or two samples. The labels should reflect the commonalities across all samples, not just one or two outliers.
 
 GUIDELINES FOR LABELS:
 1. FIND THE PATTERNS: What specific concerns, people, geography or places, events, or topics hold these samples together?
 2. DIFFERENTIATE: Each of the 5 labels should capture a distinct angle (Subject, Tone, Actors, or Context).
-1. PRIMARY AGENT/ENTITY: Who is the actual driver of this specific group?
-2. GEOGRAPHIC ANCHOR: Is there a specific border, city, or front?
 3. SOCIAL REGISTER: What is the nature of the power dynamic? 
 4. MOTIF/CONCERN: What is the recurring strategic anxiety or optimism?
 
