@@ -67,8 +67,6 @@ The following samples come from representative documents from a specific sub-clu
 
 Your goal is to identify the commonalities between all provided samples that tie the subcluster together. What makes is specific WITHIN the Parent Cluster themes.
 
-PARENT CLUSTER CONTEXT: 
-The high-level domain labels are as follows: {parent_cluster_labels}.
 
 TASK:
 Examine the provided samples. Identify 5 labels (CamelCase, max 3 words) that define the subcluster as a distincty entity within the parent cluster. 
