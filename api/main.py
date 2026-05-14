@@ -1,9 +1,28 @@
+import logging
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.routers import books, segments, embed, clusters
 
-app = FastAPI(title="Scholarmap API", version="1.0.0")
+logger = logging.getLogger("scholarmap")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    import torch
+
+    if torch.cuda.is_available():
+        device_name = torch.cuda.get_device_name(0)
+        vram = torch.cuda.get_device_properties(0).total_memory // (1024**2)
+        logger.info("GPU available: %s (%d MB VRAM)", device_name, vram)
+    else:
+        logger.info("No GPU detected — running on CPU")
+    yield
+
+
+app = FastAPI(title="Scholarmap API", version="1.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
