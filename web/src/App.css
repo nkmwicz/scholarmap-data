@@ -1,0 +1,80 @@
+body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+  background: #f5f5f5;
+  color: #111;
+}
+
+.nav {
+  background: #1a1a2e;
+  padding: 0.75rem 1.5rem;
+  display: flex;
+  align-items: center;
+}
+
+.nav-brand {
+  color: #e2d9f3;
+  text-decoration: none;
+  font-size: 1.1rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.main {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 9999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.badge-pending       { background: #e5e7eb; color: #374151; }
+.badge-ocr           { background: #fef3c7; color: #92400e; }
+.badge-ocr_complete  { background: #d1fae5; color: #065f46; }
+.badge-segments      { background: #dbeafe; color: #1e40af; }
+.badge-embedded      { background: #ede9fe; color: #5b21b6; }
+.badge-labeled       { background: #d1fae5; color: #065f46; }
+
+.btn {
+  padding: 0.45rem 1rem;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.btn-primary   { background: #4f46e5; color: #fff; }
+.btn-secondary { background: #e5e7eb; color: #374151; }
+.btn-danger    { background: #fee2e2; color: #b91c1c; }
+.btn-success   { background: #d1fae5; color: #065f46; }
+.btn:disabled  { opacity: 0.5; cursor: not-allowed; }
+
+.card {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.1);
+  padding: 1rem 1.25rem;
+}
+
+.form-group { margin-bottom: 0.875rem; }
+.form-group label { display: block; font-size: 0.8rem; font-weight: 600; margin-bottom: 0.3rem; }
+.form-group input,
+.form-group select {
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  box-sizing: border-box;
+}
+
+.error-msg { color: #b91c1c; font-size: 0.875rem; margin-top: 0.5rem; }

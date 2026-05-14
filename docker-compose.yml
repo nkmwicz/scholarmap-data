@@ -1,0 +1,75 @@
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: scholarmap
+      POSTGRES_USER: scholarmap
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-scholarmap}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/migrations:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scholarmap"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://scholarmap:${POSTGRES_PASSWORD:-scholarmap}@db:5432/scholarmap
+      MISTRAL_KEY: ${MISTRAL_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+    volumes:
+      - ./books_work:/app/books_work
+      - model_cache:/root/.cache/huggingface
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./api
+          target: /app/api
+        - action: sync+restart
+          path: ./ocr
+          target: /app/ocr
+        - action: sync+restart
+          path: ./embeds
+          target: /app/embeds
+        - action: sync+restart
+          path: ./clustering
+          target: /app/clustering
+        - action: sync+restart
+          path: ./genai
+          target: /app/genai
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_URL: http://localhost:8000
+    depends_on:
+      - api
+    develop:
+      watch:
+        - action: sync
+          path: ./web/src
+          target: /app/src
+
+volumes:
+  postgres_data:
+  model_cache:
