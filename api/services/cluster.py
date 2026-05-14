@@ -17,8 +17,8 @@ async def cluster_book(book_id: uuid.UUID, db: AsyncSession) -> int:
       soft_membership:      list[list[int]]|None — cluster indices per embed (embed-indexed)
       representative_samples: list[list[int]]    — embed indices per cluster (cluster-indexed)
     """
-    from clustering.clustering import create_cluster  # noqa: PLC0415
-    from genai.mistral import (
+    from api.clustering.clustering import create_cluster  # noqa: PLC0415
+    from api.genai.mistral import (
         get_mistral_cluster_tags,
         Cluster as MistralCluster,
     )  # noqa: PLC0415

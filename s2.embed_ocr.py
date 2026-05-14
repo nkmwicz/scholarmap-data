@@ -1,6 +1,6 @@
 import sys
 from pathlib import Path
-from utils.check_env import check_environment
+from api.utils.check_env import check_environment
 
 check_environment()
 

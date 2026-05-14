@@ -37,7 +37,7 @@ async def embed_book(book_id: uuid.UUID, db: AsyncSession) -> int:
     Returns total chunk count.
     """
     # Lazy import — model loading is expensive; only done when needed
-    from embeds.embed_letters import encode  # noqa: PLC0415
+    from api.embeds.embed_letters import encode  # noqa: PLC0415
 
     book_result = await db.execute(select(Book).where(Book.id == book_id))
     book: Book = book_result.scalar_one()
