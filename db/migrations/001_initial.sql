@@ -3,13 +3,17 @@ CREATE EXTENSION IF NOT EXISTS vector;
 
 -- Books / primary source collections
 CREATE TABLE books (
-    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    slug        TEXT NOT NULL UNIQUE,
-    title       TEXT NOT NULL,
+    id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    slug          TEXT NOT NULL UNIQUE,
+    title         TEXT NOT NULL,
+    author        TEXT,
+    year          TEXT,
+    volume_number INT,
+    description   TEXT,
     document_type TEXT NOT NULL DEFAULT 'letters' CHECK (document_type IN ('letters', 'chapters', 'other')),
-    status      TEXT NOT NULL DEFAULT 'pending',
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    status        TEXT NOT NULL DEFAULT 'pending',
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- Raw OCR pages from Mistral

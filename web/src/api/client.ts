@@ -23,6 +23,10 @@ export interface Book {
   id: string;
   slug: string;
   title: string;
+  author: string | null;
+  year: string | null;
+  volume_number: number | null;
+  description: string | null;
   document_type: DocumentType;
   status: string;
 }
@@ -78,6 +82,10 @@ export const api = {
     create: (payload: {
       slug: string;
       title: string;
+      author?: string;
+      year?: string;
+      volume_number?: number;
+      description?: string;
       document_type: DocumentType;
     }) =>
       request<Book>("/books", {

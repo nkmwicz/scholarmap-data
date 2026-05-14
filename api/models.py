@@ -28,6 +28,10 @@ class Book(Base):
     )
     slug: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     title: Mapped[str] = mapped_column(String, nullable=False)
+    author: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    year: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    volume_number: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     document_type: Mapped[str] = mapped_column(
         String, nullable=False, default="letters"
     )

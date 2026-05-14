@@ -22,6 +22,10 @@ router = APIRouter()
 class BookCreate(BaseModel):
     slug: str
     title: str
+    author: str | None = None
+    year: str | None = None
+    volume_number: int | None = None
+    description: str | None = None
     document_type: str = "letters"
 
 
@@ -29,6 +33,10 @@ class BookOut(BaseModel):
     id: uuid.UUID
     slug: str
     title: str
+    author: str | None
+    year: str | None
+    volume_number: int | None
+    description: str | None
     document_type: str
     status: str
 
@@ -49,7 +57,13 @@ async def create_book(payload: BookCreate, db: AsyncSession = Depends(get_db)):
     if existing.scalar_one_or_none():
         raise HTTPException(409, f"Slug '{payload.slug}' already exists")
     book = Book(
-        slug=payload.slug, title=payload.title, document_type=payload.document_type
+        slug=payload.slug,
+        title=payload.title,
+        author=payload.author,
+        year=payload.year,
+        volume_number=payload.volume_number,
+        description=payload.description,
+        document_type=payload.document_type,
     )
     db.add(book)
     await db.commit()
