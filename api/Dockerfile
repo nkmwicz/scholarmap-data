@@ -22,14 +22,7 @@ RUN if [ "$USE_GPU" = "true" ]; then \
 COPY api/requirements.txt /app/api/requirements.txt
 RUN pip install --no-cache-dir -r /app/api/requirements.txt
 
-# Copy pipeline modules that api services import
-COPY ocr/ /app/ocr/
-COPY embeds/ /app/embeds/
-COPY clustering/ /app/clustering/
-COPY genai/ /app/genai/
-COPY utils/ /app/utils/
-
-# Copy api package last
+# Copy api package (includes clustering, genai, ocr, utils, embeds)
 COPY api/ /app/api/
 
 ENV PYTHONPATH=/app

@@ -85,7 +85,7 @@ The database schema is applied automatically on first start. The first build wil
 docker compose watch
 ```
 
-File changes under `api/`, `ocr/`, `embeds/`, `clustering/`, `genai/`, and `web/src/` are synced into the running containers without a full rebuild.
+File changes under `api/` (including `api/clustering/`, `api/genai/`, `api/ocr/`, `api/utils/`, `api/embeds/`) and `web/src/` are synced into the running containers without a full rebuild.
 
 ### Stop
 

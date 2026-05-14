@@ -52,18 +52,6 @@ services:
         - action: sync+restart
           path: ./api
           target: /app/api
-        - action: sync+restart
-          path: ./ocr
-          target: /app/ocr
-        - action: sync+restart
-          path: ./embeds
-          target: /app/embeds
-        - action: sync+restart
-          path: ./clustering
-          target: /app/clustering
-        - action: sync+restart
-          path: ./genai
-          target: /app/genai
 
   web:
     build:
