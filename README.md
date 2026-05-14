@@ -51,6 +51,14 @@ MISTRAL_KEY=your_key_here
 docker compose up --build
 ```
 
+This builds a **CPU-only** API image by default. To use a GPU for faster embedding:
+
+```bash
+USE_GPU=true docker compose up --build
+```
+
+> **GPU requirements**: NVIDIA GPU + [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) installed on the host. The `USE_GPU=true` flag installs CUDA-enabled PyTorch wheels and enables GPU passthrough in the container.
+
 This starts three services:
 
 | Service | URL | Description |
