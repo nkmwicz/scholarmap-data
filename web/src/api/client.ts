@@ -71,6 +71,25 @@ export interface SearchResult {
   cluster_labels: ClusterLabel[];
 }
 
+export interface LetterSummary {
+  author: string;
+  author_location: string;
+  recipient: string;
+  recipient_location: string;
+  date: string;
+  summary: string;
+  people_referenced: string[];
+  places_referenced: string[];
+  events_referenced: string[];
+}
+
+export interface ChapterSummary {
+  summary: string;
+  people_referenced: string[];
+  places_referenced: string[];
+  events_referenced: string[];
+}
+
 export interface Segment {
   id: string;
   segment_index: number;
@@ -79,6 +98,8 @@ export interface Segment {
   page_range: number[];
   document_type: DocumentType;
   cluster_labels?: ClusterLabel[];
+  ai_summary: LetterSummary | ChapterSummary | null;
+  neo4j_entered: boolean;
 }
 
 export interface RepresentativeSample {
@@ -160,6 +181,22 @@ export const api = {
     list: (bookId: string) => request<Segment[]>(`/books/${bookId}/segments`),
     get: (bookId: string, segmentId: string) =>
       request<Segment>(`/books/${bookId}/segments/${segmentId}`),
+    summarize: (bookId: string, segmentId: string, force = false) =>
+      request<Segment>(
+        `/books/${bookId}/segments/${segmentId}/summary?force=${force}`,
+        {
+          method: "POST",
+        },
+      ),
+    patch: (
+      bookId: string,
+      segmentId: string,
+      data: { neo4j_entered?: boolean },
+    ) =>
+      request<Segment>(`/books/${bookId}/segments/${segmentId}`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      }),
   },
 
   embed: {

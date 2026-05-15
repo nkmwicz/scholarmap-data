@@ -9,6 +9,7 @@ import {
 } from "../api/client";
 import StatusBadge from "../components/StatusBadge";
 import { PanZoom } from "../components/PanZoom";
+import { SegmentSummaryPanel } from "../components/SegmentSummaryPanel";
 
 export default function BookList() {
   const [books, setBooks] = useState<Book[]>([]);
@@ -30,7 +31,7 @@ export default function BookList() {
     book: Book | null;
     loading: boolean;
     pageIdx: number;
-    viewMode: "text" | "images";
+    viewMode: "text" | "images" | "summary";
   };
   const [viewer, setViewer] = useState<ViewerState | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -570,40 +571,52 @@ export default function BookList() {
                   flexShrink: 0,
                 }}
               >
-                {/* Text/Images toggle — only show if gallica available */}
-                {viewer.book?.gallica_url && (
-                  <div
-                    style={{
-                      display: "flex",
-                      border: "1px solid #e5e7eb",
-                      borderRadius: 6,
-                      overflow: "hidden",
-                    }}
-                  >
-                    {(["text", "images"] as const).map((mode) => (
-                      <button
-                        key={mode}
-                        onClick={() =>
-                          setViewer((v) => v && { ...v, viewMode: mode })
-                        }
-                        style={{
-                          padding: "0.2rem 0.65rem",
-                          fontSize: "0.72rem",
-                          fontWeight: 500,
-                          border: "none",
-                          cursor: "pointer",
-                          background:
-                            viewer.viewMode === mode
-                              ? "#1e40af"
-                              : "transparent",
-                          color: viewer.viewMode === mode ? "#fff" : "#374151",
-                        }}
-                      >
-                        {mode === "text" ? "OCR Text" : "Images"}
-                      </button>
-                    ))}
-                  </div>
-                )}
+                {/* Tab toggle — always show; images tab only if gallica available */}
+                <div
+                  style={{
+                    display: "flex",
+                    border: "1px solid #e5e7eb",
+                    borderRadius: 6,
+                    overflow: "hidden",
+                  }}
+                >
+                  {(
+                    [
+                      "text",
+                      ...(viewer.book?.gallica_url ? ["images"] : []),
+                      "summary",
+                    ] as const
+                  ).map((mode) => (
+                    <button
+                      key={mode}
+                      onClick={() =>
+                        setViewer(
+                          (v) =>
+                            v && {
+                              ...v,
+                              viewMode: mode as "text" | "images" | "summary",
+                            },
+                        )
+                      }
+                      style={{
+                        padding: "0.2rem 0.65rem",
+                        fontSize: "0.72rem",
+                        fontWeight: 500,
+                        border: "none",
+                        cursor: "pointer",
+                        background:
+                          viewer.viewMode === mode ? "#1e40af" : "transparent",
+                        color: viewer.viewMode === mode ? "#fff" : "#374151",
+                      }}
+                    >
+                      {mode === "text"
+                        ? "OCR Text"
+                        : mode === "images"
+                          ? "Images"
+                          : "Summary"}
+                    </button>
+                  ))}
+                </div>
                 <button
                   onClick={() => setViewer(null)}
                   style={{
@@ -770,7 +783,7 @@ export default function BookList() {
                   </div>
                 )}
                 {/* Text panel */}
-                {(viewer.viewMode === "text" || !viewer.book?.gallica_url) && (
+                {viewer.viewMode === "text" && (
                   <div
                     style={{
                       flex: 1,
@@ -785,6 +798,15 @@ export default function BookList() {
                   >
                     {viewer.segment.markdown}
                   </div>
+                )}
+                {viewer.viewMode === "summary" && (
+                  <SegmentSummaryPanel
+                    segment={viewer.segment}
+                    bookId={viewer.result.book_id}
+                    onUpdate={(updated) =>
+                      setViewer((v) => v && { ...v, segment: updated })
+                    }
+                  />
                 )}
               </>
             ) : (

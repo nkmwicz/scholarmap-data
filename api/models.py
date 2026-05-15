@@ -13,7 +13,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.dialects.postgresql import ARRAY, UUID
+from sqlalchemy.dialects.postgresql import ARRAY, JSON, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from pgvector.sqlalchemy import Vector
 
@@ -121,6 +121,8 @@ class Segment(Base):
         ARRAY(Integer), nullable=False, default=list
     )
     document_type: Mapped[str] = mapped_column(String, nullable=False)
+    ai_summary: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    neo4j_entered: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     book: Mapped["Book"] = relationship("Book", back_populates="segments")
     chunks: Mapped[list["SegmentChunk"]] = relationship(

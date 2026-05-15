@@ -1,5 +1,6 @@
+import asyncio
 import uuid
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -38,6 +39,8 @@ class SegmentOut(BaseModel):
     markdown: str
     page_range: list[int]
     document_type: str
+    ai_summary: dict | None = None
+    neo4j_entered: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -128,4 +131,69 @@ async def get_segment(
     seg = result.scalar_one_or_none()
     if seg is None:
         raise HTTPException(status_code=404, detail="Segment not found")
+    return seg
+
+
+# ── AI Summary ────────────────────────────────────────────────────────────────
+
+
+@router.post("/{book_id}/segments/{segment_id}/summary", response_model=SegmentOut)
+async def generate_summary(
+    book_id: uuid.UUID,
+    segment_id: uuid.UUID,
+    force: bool = Query(default=False),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(Segment).where(Segment.id == segment_id, Segment.book_id == book_id)
+    )
+    seg = result.scalar_one_or_none()
+    if seg is None:
+        raise HTTPException(status_code=404, detail="Segment not found")
+
+    if seg.ai_summary and not force:
+        return seg
+
+    from api.genai.mistral import (
+        get_mistral_summary,
+        get_mistral_chapter_summary,
+    )  # noqa: PLC0415
+
+    if seg.document_type == "letters":
+        summary_obj = await asyncio.to_thread(get_mistral_summary, seg.markdown)
+    else:
+        summary_obj = await asyncio.to_thread(get_mistral_chapter_summary, seg.markdown)
+
+    seg.ai_summary = summary_obj.model_dump()
+    await db.commit()
+    await db.refresh(seg)
+    return seg
+
+
+# ── Neo4j toggle ──────────────────────────────────────────────────────────────
+
+
+class SegmentPatch(BaseModel):
+    neo4j_entered: bool | None = None
+
+
+@router.patch("/{book_id}/segments/{segment_id}", response_model=SegmentOut)
+async def patch_segment(
+    book_id: uuid.UUID,
+    segment_id: uuid.UUID,
+    payload: SegmentPatch,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(Segment).where(Segment.id == segment_id, Segment.book_id == book_id)
+    )
+    seg = result.scalar_one_or_none()
+    if seg is None:
+        raise HTTPException(status_code=404, detail="Segment not found")
+
+    if payload.neo4j_entered is not None:
+        seg.neo4j_entered = payload.neo4j_entered
+
+    await db.commit()
+    await db.refresh(seg)
     return seg

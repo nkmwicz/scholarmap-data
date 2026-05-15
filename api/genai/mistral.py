@@ -38,6 +38,13 @@ class LetterSummary(BaseModel):
     events_referenced: list[str]
 
 
+class ChapterSummary(BaseModel):
+    summary: str
+    people_referenced: list[str]
+    places_referenced: list[str]
+    events_referenced: list[str]
+
+
 def get_mistral_cluster_tags(
     clusters: List[Cluster],
     is_sub_cluster: bool = False,
@@ -201,6 +208,45 @@ LETTER:
             recipient_location="",
             recipient="",
             date="",
+            summary="",
+            people_referenced=[],
+            places_referenced=[],
+            events_referenced=[],
+        )
+
+
+def get_mistral_chapter_summary(text: str) -> ChapterSummary:
+    api_key = os.environ["MISTRAL_KEY"]
+    MODEL_ID = "mistral-large-latest"
+    client = Mistral(api_key=api_key)
+    system_prompt = (
+        "You are an early modern historian. Your task is to read the following text excerpt "
+        "and extract its key content: a concise summary and any people, places, or events referenced. "
+        "The text may be in English, French, Latin, Italian, or Turkish and may contain archaic language."
+    )
+    prompt = f"""Read the following text and extract:
+
+1. Summary: What is the main subject or argument of this passage?
+2. People Referenced: List any people mentioned.
+3. Places Referenced: List any places mentioned.
+4. Events Referenced: List any events mentioned.
+
+TEXT:
+{text}
+"""
+    try:
+        chat_response = client.chat.parse(
+            model=MODEL_ID,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt},
+            ],
+            response_format=ChapterSummary,
+        )
+        return chat_response.choices[0].message.parsed
+    except Exception as e:
+        print(f"Error occurred while summarizing chapter: {e}")
+        return ChapterSummary(
             summary="",
             people_referenced=[],
             places_referenced=[],

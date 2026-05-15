@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, type Book, type Cluster, type Segment } from "../api/client";
 import { PanZoom } from "../components/PanZoom";
+import { SegmentSummaryPanel } from "../components/SegmentSummaryPanel";
 
 const col: React.CSSProperties = {
   display: "flex",
@@ -23,7 +24,9 @@ export default function ClusterView() {
   const [selectedSegment, setSelectedSegment] = useState<Segment | null>(null);
   const [loadingSegs, setLoadingSegs] = useState(false);
 
-  const [viewMode, setViewMode] = useState<"text" | "images">("text");
+  const [viewMode, setViewMode] = useState<"text" | "images" | "summary">(
+    "text",
+  );
   const [pageIdx, setPageIdx] = useState(0);
   const [clusterBarOpen, setClusterBarOpen] = useState(true);
   // Gallica calibration
@@ -693,7 +696,43 @@ export default function ClusterView() {
                           flexShrink: 0,
                         }}
                       >
-                        {(["text", "images"] as const).map((mode) => (
+                        {(["text", "images", "summary"] as const).map(
+                          (mode) => (
+                            <button
+                              key={mode}
+                              onClick={() => setViewMode(mode)}
+                              style={{
+                                padding: "0.2rem 0.65rem",
+                                fontSize: "0.72rem",
+                                fontWeight: 500,
+                                border: "none",
+                                cursor: "pointer",
+                                background:
+                                  viewMode === mode ? "#1e40af" : "transparent",
+                                color: viewMode === mode ? "#fff" : "#374151",
+                              }}
+                            >
+                              {mode === "text"
+                                ? "OCR Text"
+                                : mode === "images"
+                                  ? "Images"
+                                  : "Summary"}
+                            </button>
+                          ),
+                        )}
+                      </div>
+                    )}
+                    {!book?.gallica_url && (
+                      <div
+                        style={{
+                          display: "flex",
+                          border: "1px solid #e5e7eb",
+                          borderRadius: 6,
+                          overflow: "hidden",
+                          flexShrink: 0,
+                        }}
+                      >
+                        {(["text", "summary"] as const).map((mode) => (
                           <button
                             key={mode}
                             onClick={() => setViewMode(mode)}
@@ -708,7 +747,7 @@ export default function ClusterView() {
                               color: viewMode === mode ? "#fff" : "#374151",
                             }}
                           >
-                            {mode === "text" ? "OCR Text" : "Images"}
+                            {mode === "text" ? "OCR Text" : "Summary"}
                           </button>
                         ))}
                       </div>
@@ -836,10 +875,7 @@ export default function ClusterView() {
                       overflowY: "auto",
                       flex: 1,
                       padding: "1rem 1.25rem",
-                      display:
-                        viewMode === "text" || !book?.gallica_url
-                          ? "block"
-                          : "none",
+                      display: viewMode === "text" ? "block" : "none",
                       fontFamily: "Georgia, serif",
                       fontSize: "0.9rem",
                       lineHeight: 1.8,
@@ -849,6 +885,13 @@ export default function ClusterView() {
                   >
                     {selectedSegment.markdown}
                   </div>
+                  {viewMode === "summary" && bookId && (
+                    <SegmentSummaryPanel
+                      segment={selectedSegment}
+                      bookId={bookId}
+                      onUpdate={(updated) => setSelectedSegment(updated)}
+                    />
+                  )}
                 </>
               ) : (
                 <div
