@@ -2,30 +2,9 @@ import random
 import polars as pl
 from typing import List, Union
 import numpy as np
-from openai import OpenAI
-import os
 import dotenv
 
 dotenv.load_dotenv()
-
-
-def embed_items(texts):
-    """
-    Embed text into vectors.
-
-    Parameters:
-        texts (list): The collection of texts to be embedded.
-    Returns:
-        embeddings (list): A list of embedded vectors.
-    """
-    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-    texts = [text.replace("\n", " ") for text in texts]
-    if isinstance(texts, str):
-        texts = [texts]
-    texts = [t.replace("\n", " ") for t in texts]
-    response = client.embeddings.create(input=texts, model="text-embedding-3-small")
-
-    return [data.embedding for data in response.data]
 
 
 def normalize_rows(mat, eps=1e-10):
