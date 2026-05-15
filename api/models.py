@@ -139,7 +139,7 @@ class SegmentChunk(Base):
     chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
     text: Mapped[str] = mapped_column(Text, nullable=False)
     word_length: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    embedding: Mapped[Optional[list[float]]] = mapped_column(Vector(768), nullable=True)
+    embedding: Mapped[Optional[list[float]]] = mapped_column(Vector(384), nullable=True)
 
     segment: Mapped["Segment"] = relationship("Segment", back_populates="chunks")
     memberships: Mapped[list["ClusterMembership"]] = relationship(

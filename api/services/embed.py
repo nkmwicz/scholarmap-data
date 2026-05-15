@@ -33,7 +33,7 @@ def _chunk_text(text: str, max_words: int) -> list[str]:
 async def embed_book(book_id: uuid.UUID, db: AsyncSession) -> int:
     """
     Chunk and embed all segments for a book.
-    Stores results in segment_chunks with 768-dim vectors.
+    Stores results in segment_chunks with 384-dim vectors.
     Returns total chunk count.
     """
     # Lazy import — model loading is expensive; only done when needed

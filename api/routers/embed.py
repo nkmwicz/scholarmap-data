@@ -20,7 +20,7 @@ async def trigger_embed(
     book = result.scalar_one_or_none()
     if not book:
         raise HTTPException(404, "Book not found")
-    if book.status not in ("segments_complete", "embedded"):
+    if book.status not in ("segments_complete", "embedded", "embedding"):
         raise HTTPException(
             400, f"Book must be in segments_complete status, currently: {book.status}"
         )

@@ -56,10 +56,11 @@
   margin: 0 auto;
   text-align: center;
   border-inline: 1px solid var(--border);
-  min-height: 100svh;
+  height: 100svh;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 body {
@@ -74,8 +75,9 @@ h2 {
 }
 
 h1 {
+  line-height: 118%;
   font-size: 56px;
-  letter-spacing: -1.68px;
+  /* letter-spacing: -1.68px; */
   margin: 32px 0;
   @media (max-width: 1024px) {
     font-size: 36px;

@@ -69,7 +69,7 @@ CREATE TABLE segment_chunks (
     chunk_index     INT NOT NULL,
     text            TEXT NOT NULL,
     word_length     INT NOT NULL DEFAULT 0,
-    embedding       vector(768),
+    embedding       vector(384),
     UNIQUE (segment_id, chunk_index)
 );
 

@@ -8,6 +8,7 @@ export default function BookDetail() {
   const [book, setBook] = useState<Book | null>(null);
   const [error, setError] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [boundaryCount, setBoundaryCount] = useState<number | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
@@ -27,6 +28,11 @@ export default function BookDetail() {
 
   useEffect(() => {
     load();
+    if (bookId)
+      api.boundaries
+        .get(bookId)
+        .then((data) => setBoundaryCount(data.boundaries.length))
+        .catch(() => {});
   }, [bookId]);
 
   // Poll only while actively processing
@@ -52,6 +58,7 @@ export default function BookDetail() {
   const handleEmbed = async () => {
     try {
       await api.embed.trigger(bookId!);
+      setBook((prev) => (prev ? { ...prev, status: "embedding" } : prev));
     } catch (e: any) {
       setError(e.message);
     }
@@ -60,6 +67,7 @@ export default function BookDetail() {
   const handleCluster = async () => {
     try {
       await api.clusters.trigger(bookId!);
+      setBook((prev) => (prev ? { ...prev, status: "clustering" } : prev));
     } catch (e: any) {
       setError(e.message);
     }
@@ -74,23 +82,34 @@ export default function BookDetail() {
     "boundaries_pending",
     "segments_complete",
   ].includes(book.status);
-  const canEmbed = ["segments_complete", "embedded"].includes(book.status);
-  const canCluster = ["embedded", "clustered", "labeled"].includes(book.status);
+  const canEmbed = ["segments_complete", "embedded", "embedding"].includes(
+    book.status,
+  );
+  const canCluster = [
+    "embedded",
+    "clustered",
+    "labeled",
+    "clustering",
+    "labeling",
+  ].includes(book.status);
 
   return (
     <div style={{ maxWidth: 700 }}>
       <Link to="/" style={{ color: "#6b7280", fontSize: "0.85rem" }}>
         ← All books
       </Link>
+
       <div
         style={{
           display: "flex",
           alignItems: "center",
           gap: "0.75rem",
-          margin: "0.75rem 0 1.5rem",
+          // margin: "0.75rem 0 1.5rem",
         }}
       >
-        <h1 style={{ margin: 0 }}>{book.title}</h1>
+        <h1>
+          {book.author}, <cite>{book.title.slice(0, 25)}...</cite>
+        </h1>
         <StatusBadge status={book.status} />
       </div>
 
@@ -144,7 +163,7 @@ export default function BookDetail() {
           <h3 style={{ margin: "0 0 0.5rem" }}>2 · Mark Segment Boundaries</h3>
           <p
             style={{
-              margin: "0 0 0.75rem",
+              margin: "0 0 0.5rem",
               color: "#6b7280",
               fontSize: "0.875rem",
             }}
@@ -152,6 +171,21 @@ export default function BookDetail() {
             Scroll through OCR pages, click lines to mark boundaries, exclude
             front/back matter.
           </p>
+          {boundaryCount !== null && (
+            <p
+              style={{
+                margin: "0 0 0.75rem",
+                fontSize: "0.8rem",
+                color: boundaryCount > 0 ? "#065f46" : "#9ca3af",
+              }}
+            >
+              {boundaryCount > 0
+                ? `✓ ${boundaryCount} ${
+                    boundaryCount === 1 ? "boundary" : "boundaries"
+                  } defined`
+                : "No boundaries defined yet"}
+            </p>
+          )}
           <button
             className="btn btn-primary"
             disabled={!canMark}
@@ -171,14 +205,14 @@ export default function BookDetail() {
               fontSize: "0.875rem",
             }}
           >
-            Chunk segments and generate 768-dim embeddings with IBM Granite.
+            Chunk segments and generate 384-dim embeddings with IBM Granite.
           </p>
           <button
             className="btn btn-primary"
-            disabled={!canEmbed}
+            disabled={!canEmbed || book.status === "embedding"}
             onClick={handleEmbed}
           >
-            Run Embedding
+            {book.status === "embedding" ? "Embedding…" : "Run Embedding"}
           </button>
         </div>
 
@@ -197,12 +231,18 @@ export default function BookDetail() {
           <div style={{ display: "flex", gap: "0.5rem" }}>
             <button
               className="btn btn-primary"
-              disabled={!canCluster}
+              disabled={
+                !canCluster || ["clustering", "labeling"].includes(book.status)
+              }
               onClick={handleCluster}
             >
-              Run Clustering
+              {book.status === "clustering"
+                ? "Clustering…"
+                : book.status === "labeling"
+                  ? "Labeling…"
+                  : "Run Clustering"}
             </button>
-            {book.status === "labeled" && (
+            {["clustered", "labeled"].includes(book.status) && (
               <button
                 className="btn btn-secondary"
                 onClick={() => navigate(`/books/${bookId}/clusters`)}

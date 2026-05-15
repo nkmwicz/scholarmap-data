@@ -38,7 +38,13 @@ async def trigger_cluster(
     book = result.scalar_one_or_none()
     if not book:
         raise HTTPException(404, "Book not found")
-    if book.status not in ("embedded", "clustered", "labeled"):
+    if book.status not in (
+        "embedded",
+        "clustered",
+        "labeled",
+        "clustering",
+        "labeling",
+    ):
         raise HTTPException(
             400, f"Book must be embedded first, currently: {book.status}"
         )
