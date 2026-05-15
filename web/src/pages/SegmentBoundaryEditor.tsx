@@ -138,6 +138,7 @@ export default function SegmentBoundaryEditor() {
         gridTemplateColumns: "1fr 320px",
         gap: "1rem",
         height: "calc(100vh - 90px)",
+        overflow: "hidden",
       }}
     >
       {/* Left: pages */}
@@ -238,6 +239,7 @@ export default function SegmentBoundaryEditor() {
                       )}
                       <p
                         onClick={() => toggleLine(page.page_index, lineIdx)}
+                        className="boundary-line"
                         style={{
                           margin: "1px 0",
                           padding: "2px 4px",
@@ -250,7 +252,7 @@ export default function SegmentBoundaryEditor() {
                           whiteSpace: "pre-wrap",
                           userSelect: "none",
                         }}
-                        title="Click to mark/unmark as segment start"
+                        data-line-label={`p${page.page_index + 1} · line ${lineIdx + 1}`}
                       >
                         {line || "\u00A0"}
                       </p>
@@ -263,7 +265,15 @@ export default function SegmentBoundaryEditor() {
       </div>
 
       {/* Right: segment list */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: "0.75rem",
+          overflow: "hidden",
+          minHeight: 0,
+        }}
+      >
         <div
           style={{
             display: "flex",
@@ -288,7 +298,14 @@ export default function SegmentBoundaryEditor() {
         </p>
 
         <div
-          style={{ overflowY: "auto", flex: 1, display: "grid", gap: "0.5rem" }}
+          style={{
+            overflowY: "auto",
+            flex: 1,
+            minHeight: 0,
+            display: "grid",
+            gap: "0.5rem",
+            alignContent: "start",
+          }}
         >
           {segmentPreviews.map((seg) => (
             <div

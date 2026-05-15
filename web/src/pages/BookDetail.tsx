@@ -18,12 +18,23 @@ export default function BookDetail() {
       .catch((e) => setError(e.message));
   };
 
+  const PROCESSING_STATUSES = [
+    "ocr_processing",
+    "embedding",
+    "clustering",
+    "labeling",
+  ];
+
   useEffect(() => {
     load();
-    // Poll status while processing
+  }, [bookId]);
+
+  // Poll only while actively processing
+  useEffect(() => {
+    if (!book || !PROCESSING_STATUSES.includes(book.status)) return;
     const interval = setInterval(load, 3000);
     return () => clearInterval(interval);
-  }, [bookId]);
+  }, [bookId, book?.status]);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -56,7 +67,8 @@ export default function BookDetail() {
 
   if (!book) return <p>Loading…</p>;
 
-  const canUpload = ["pending", "ocr_complete"].includes(book.status);
+  const canUpload = book.status !== "ocr_processing";
+  const ocrDone = !["pending", "ocr_processing", "error"].includes(book.status);
   const canMark = [
     "ocr_complete",
     "boundaries_pending",
@@ -87,16 +99,30 @@ export default function BookDetail() {
       <div style={{ display: "grid", gap: "0.75rem" }}>
         {/* Step 1 */}
         <div className="card">
-          <h3 style={{ margin: "0 0 0.5rem" }}>1 · OCR</h3>
-          <p
-            style={{
-              margin: "0 0 0.75rem",
-              color: "#6b7280",
-              fontSize: "0.875rem",
-            }}
-          >
-            Upload a PDF to run Mistral OCR and extract page-level markdown.
-          </p>
+          <h3 style={{ margin: "0 0 0.5rem" }}>
+            1 · OCR{ocrDone && " (Complete)"}
+          </h3>
+          {ocrDone ? (
+            <p
+              style={{
+                margin: "0 0 0.75rem",
+                color: "#065f46",
+                fontSize: "0.875rem",
+              }}
+            >
+              ✓ OCR complete. Upload a new PDF to re-run.
+            </p>
+          ) : (
+            <p
+              style={{
+                margin: "0 0 0.75rem",
+                color: "#6b7280",
+                fontSize: "0.875rem",
+              }}
+            >
+              Upload a PDF to run Mistral OCR and extract page-level markdown.
+            </p>
+          )}
           <input
             ref={fileRef}
             type="file"
@@ -105,11 +131,11 @@ export default function BookDetail() {
             onChange={handleUpload}
           />
           <button
-            className="btn btn-primary"
+            className={`btn ${ocrDone ? "btn-secondary" : "btn-primary"}`}
             disabled={!canUpload || uploading}
             onClick={() => fileRef.current?.click()}
           >
-            {uploading ? "Uploading…" : "Upload PDF"}
+            {uploading ? "Uploading…" : ocrDone ? "Restart OCR" : "Upload PDF"}
           </button>
         </div>
 

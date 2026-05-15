@@ -42,6 +42,32 @@ body {
 .badge-segments      { background: #dbeafe; color: #1e40af; }
 .badge-embedded      { background: #ede9fe; color: #5b21b6; }
 .badge-labeled       { background: #d1fae5; color: #065f46; }
+.badge-error         { background: #fee2e2; color: #991b1b; }
+
+/* Segment boundary editor — line hover tooltip */
+.boundary-line {
+  position: relative;
+}
+.boundary-line::after {
+  content: attr(data-line-label);
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%) translateX(-100%) translateX(-6px);
+  background: #1f2937;
+  color: #f9fafb;
+  font-size: 0.65rem;
+  white-space: nowrap;
+  padding: 2px 6px;
+  border-radius: 4px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.1s;
+  z-index: 10;
+}
+.boundary-line:hover::after {
+  opacity: 1;
+}
 
 .btn {
   padding: 0.45rem 1rem;

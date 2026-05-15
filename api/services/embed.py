@@ -73,10 +73,15 @@ async def embed_book(book_id: uuid.UUID, db: AsyncSession) -> int:
             all_chunks.append(sc)
             all_texts.append(chunk_text)
 
-    if all_texts:
-        embeddings = encode(all_texts)
-        for sc, emb in zip(all_chunks, embeddings):
-            sc.embedding = emb
+    try:
+        if all_texts:
+            embeddings = encode(all_texts)
+            for sc, emb in zip(all_chunks, embeddings):
+                sc.embedding = emb
+    except Exception as exc:
+        book.status = "error"
+        await db.commit()
+        raise exc
 
     db.add_all(all_chunks)
     book.status = "embedded"

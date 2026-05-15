@@ -11,6 +11,7 @@ const STATUS_CLASS: Record<string, string> = {
   clustering: "badge-ocr",
   clustered: "badge-labeled",
   labeled: "badge-labeled",
+  error: "badge-error",
 };
 
 export default function StatusBadge({ status }: { status: Book["status"] }) {
