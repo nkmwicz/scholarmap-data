@@ -73,6 +73,16 @@ export interface Cluster {
   representative_samples: RepresentativeSample[];
 }
 
+export interface SubclusterInfo {
+  parent_index: number;
+  child_count: number;
+}
+
+export interface ClusterStats {
+  parent_count: number;
+  subclusters: SubclusterInfo[];
+}
+
 // ── Books ─────────────────────────────────────────────────────────────────────
 
 export const api = {
@@ -125,6 +135,10 @@ export const api = {
   embed: {
     trigger: (bookId: string) =>
       request<{ status: string }>(`/books/${bookId}/embed`, { method: "POST" }),
+    stats: (bookId: string) =>
+      request<{ segment_count: number; chunk_count: number }>(
+        `/books/${bookId}/embed/stats`,
+      ),
   },
 
   clusters: {
@@ -132,6 +146,8 @@ export const api = {
       request<{ status: string }>(`/books/${bookId}/cluster`, {
         method: "POST",
       }),
+    stats: (bookId: string) =>
+      request<ClusterStats>(`/books/${bookId}/clusters/stats`),
     list: (bookId: string) => request<Cluster[]>(`/books/${bookId}/clusters`),
   },
 };
