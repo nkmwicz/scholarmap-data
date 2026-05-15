@@ -226,7 +226,7 @@ export default function ClusterView() {
 
                   {/* Sub-cluster rows */}
                   {isExpanded &&
-                    subs.map((sub) => {
+                    subs.map((sub, subIdx) => {
                       const isSubActive = selectedSub?.id === sub.id;
                       return (
                         <button
@@ -243,6 +243,16 @@ export default function ClusterView() {
                             background: isSubActive ? "#dbeafe" : "#fafafa",
                           }}
                         >
+                          <div
+                            style={{
+                              fontSize: "0.62rem",
+                              color: "#6b7280",
+                              marginBottom: "0.2rem",
+                              fontWeight: 600,
+                            }}
+                          >
+                            Sub {subIdx + 1}
+                          </div>
                           <div
                             style={{
                               display: "flex",
@@ -353,6 +363,34 @@ export default function ClusterView() {
                       >
                         p. {seg.page_range[0]}–
                         {seg.page_range[seg.page_range.length - 1]}
+                      </div>
+                    )}
+                    {seg.cluster_labels.length > 0 && (
+                      <div
+                        style={{
+                          marginTop: "0.25rem",
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: "0.2rem",
+                        }}
+                      >
+                        {seg.cluster_labels.map((lbl, i) => (
+                          <span
+                            key={i}
+                            style={{
+                              background: "#f3f4f6",
+                              color: "#374151",
+                              padding: "0.05rem 0.35rem",
+                              borderRadius: 9999,
+                              fontSize: "0.62rem",
+                              fontFamily: "monospace",
+                            }}
+                          >
+                            {lbl.sub_index !== null
+                              ? `${lbl.parent_index + 1}(${lbl.sub_index + 1})`
+                              : `${lbl.parent_index + 1}`}
+                          </span>
+                        ))}
                       </div>
                     )}
                   </button>

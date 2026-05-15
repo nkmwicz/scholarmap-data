@@ -38,14 +38,18 @@ class ClusterStats(BaseModel):
     subclusters: list[SubclusterInfo]  # one entry per parent that was split
 
 
+class ClusterLabel(BaseModel):
+    parent_index: int  # 0-based cluster_index of the parent cluster
+    sub_index: int | None  # 0-based position among sibling subs; None if top-level
+
+
 class ClusterSegmentOut(BaseModel):
     id: uuid.UUID
     segment_index: int
     title: str
     markdown: str
     page_range: list[int]
-
-    model_config = {"from_attributes": True}
+    cluster_labels: list[ClusterLabel]
 
 
 @router.post("/{book_id}/cluster", status_code=202)
@@ -110,7 +114,24 @@ async def get_cluster_segments(
     cluster_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(
+    # 1. All clusters for this book — build positional index for sub-clusters
+    all_cl_result = await db.execute(
+        select(Cluster)
+        .where(Cluster.book_id == book_id)
+        .order_by(Cluster.cluster_index)
+    )
+    all_clusters = list(all_cl_result.scalars().all())
+    cluster_map: dict[uuid.UUID, Cluster] = {c.id: c for c in all_clusters}
+
+    # sub_positions[parent_id][sub_id] = 0-based position among that parent's subs
+    sub_positions: dict[uuid.UUID, dict[uuid.UUID, int]] = {}
+    for c in all_clusters:
+        if c.is_subcluster and c.parent_cluster_id:
+            parent_subs = sub_positions.setdefault(c.parent_cluster_id, {})
+            parent_subs[c.id] = len(parent_subs)
+
+    # 2. Segments belonging to the requested cluster
+    segs_result = await db.execute(
         select(Segment)
         .join(SegmentChunk, SegmentChunk.segment_id == Segment.id)
         .join(ClusterMembership, ClusterMembership.chunk_id == SegmentChunk.id)
@@ -119,7 +140,71 @@ async def get_cluster_segments(
         .distinct()
         .order_by(Segment.segment_index)
     )
-    return result.scalars().all()
+    segments = list(segs_result.scalars().all())
+    if not segments:
+        return []
+
+    segment_ids = [s.id for s in segments]
+
+    # 3. All (segment_id, cluster_id) pairs for those segments
+    pairs_result = await db.execute(
+        select(SegmentChunk.segment_id, ClusterMembership.cluster_id)
+        .join(ClusterMembership, ClusterMembership.chunk_id == SegmentChunk.id)
+        .where(SegmentChunk.segment_id.in_(segment_ids))
+        .distinct()
+    )
+    seg_to_clusters: dict[uuid.UUID, set[uuid.UUID]] = {}
+    for seg_id, cid in pairs_result.all():
+        seg_to_clusters.setdefault(seg_id, set()).add(cid)
+
+    # 4. Build ClusterLabel lists and assemble output
+    out: list[ClusterSegmentOut] = []
+    for seg in segments:
+        sub_labels: list[ClusterLabel] = []
+        seen_parent_ids: set[uuid.UUID] = set()
+        top_labels: list[tuple[uuid.UUID, int]] = []
+
+        for cid in seg_to_clusters.get(seg.id, set()):
+            c = cluster_map.get(cid)
+            if c is None:
+                continue
+            if c.is_subcluster and c.parent_cluster_id:
+                parent = cluster_map.get(c.parent_cluster_id)
+                if parent:
+                    sub_pos = sub_positions.get(c.parent_cluster_id, {}).get(c.id, 0)
+                    sub_labels.append(
+                        ClusterLabel(
+                            parent_index=parent.cluster_index,
+                            sub_index=sub_pos,
+                        )
+                    )
+                    seen_parent_ids.add(c.parent_cluster_id)
+            else:
+                top_labels.append((c.id, c.cluster_index))
+
+        labels = sub_labels + [
+            ClusterLabel(parent_index=ci, sub_index=None)
+            for cid, ci in top_labels
+            if cid not in seen_parent_ids
+        ]
+        labels.sort(
+            key=lambda l: (
+                l.parent_index,
+                l.sub_index if l.sub_index is not None else -1,
+            )
+        )
+
+        out.append(
+            ClusterSegmentOut(
+                id=seg.id,
+                segment_index=seg.segment_index,
+                title=seg.title or "",
+                markdown=seg.markdown or "",
+                page_range=seg.page_range or [],
+                cluster_labels=labels,
+            )
+        )
+    return out
 
 
 @router.get("/{book_id}/clusters", response_model=list[ClusterOut])

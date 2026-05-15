@@ -49,6 +49,11 @@ export interface BoundariesPayload {
   excluded_pages: number[];
 }
 
+export interface ClusterLabel {
+  parent_index: number; // 0-based
+  sub_index: number | null; // 0-based position within parent; null if top-level
+}
+
 export interface Segment {
   id: string;
   segment_index: number;
@@ -56,6 +61,7 @@ export interface Segment {
   markdown: string;
   page_range: number[];
   document_type: DocumentType;
+  cluster_labels: ClusterLabel[];
 }
 
 export interface RepresentativeSample {
