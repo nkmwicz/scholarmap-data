@@ -116,3 +116,16 @@ async def list_segments(book_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
         .order_by(Segment.segment_index)
     )
     return result.scalars().all()
+
+
+@router.get("/{book_id}/segments/{segment_id}", response_model=SegmentOut)
+async def get_segment(
+    book_id: uuid.UUID, segment_id: uuid.UUID, db: AsyncSession = Depends(get_db)
+):
+    result = await db.execute(
+        select(Segment).where(Segment.id == segment_id, Segment.book_id == book_id)
+    )
+    seg = result.scalar_one_or_none()
+    if seg is None:
+        raise HTTPException(status_code=404, detail="Segment not found")
+    return seg

@@ -56,6 +56,21 @@ export interface ClusterLabel {
   sub_index: number | null; // 0-based position within parent; null if top-level
 }
 
+export interface SearchResult {
+  chunk_id: string;
+  chunk_text: string;
+  score: number;
+  segment_id: string;
+  segment_index: number;
+  segment_title: string;
+  page_range: number[];
+  book_id: string;
+  book_title: string;
+  book_author: string | null;
+  book_year: string | null;
+  cluster_labels: ClusterLabel[];
+}
+
 export interface Segment {
   id: string;
   segment_index: number;
@@ -143,6 +158,8 @@ export const api = {
 
   segments: {
     list: (bookId: string) => request<Segment[]>(`/books/${bookId}/segments`),
+    get: (bookId: string, segmentId: string) =>
+      request<Segment>(`/books/${bookId}/segments/${segmentId}`),
   },
 
   embed: {
@@ -152,6 +169,14 @@ export const api = {
       request<{ segment_count: number; chunk_count: number }>(
         `/books/${bookId}/embed/stats`,
       ),
+  },
+
+  search: {
+    query: (q: string, limit = 20) =>
+      request<SearchResult[]>("/search", {
+        method: "POST",
+        body: JSON.stringify({ query: q, limit }),
+      }),
   },
 
   clusters: {
