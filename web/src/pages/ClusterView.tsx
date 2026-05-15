@@ -907,6 +907,8 @@ export default function ClusterView() {
                       segment={selectedSegment}
                       bookId={bookId}
                       onUpdate={(updated) => setSelectedSegment(updated)}
+                      gallicaUrl={book?.gallica_url}
+                      gallicaOffset={book?.gallica_offset}
                     />
                   )}
                 </>

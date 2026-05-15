@@ -10,6 +10,8 @@ interface Props {
   segment: Segment;
   bookId: string;
   onUpdate: (updated: Segment) => void;
+  gallicaUrl?: string | null;
+  gallicaOffset?: number | null;
 }
 
 function SectionList({ title, items }: { title: string; items: string[] }) {
@@ -49,7 +51,13 @@ function SectionList({ title, items }: { title: string; items: string[] }) {
   );
 }
 
-export function SegmentSummaryPanel({ segment, bookId, onUpdate }: Props) {
+export function SegmentSummaryPanel({
+  segment,
+  bookId,
+  onUpdate,
+  gallicaUrl,
+  gallicaOffset,
+}: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -226,6 +234,48 @@ export function SegmentSummaryPanel({ segment, bookId, onUpdate }: Props) {
             title="Events Referenced"
             items={summary.events_referenced}
           />
+
+          {/* Gallica source image links */}
+          {gallicaUrl &&
+            gallicaOffset != null &&
+            segment.page_range.length > 0 && (
+              <div style={{ marginBottom: "0.9rem" }}>
+                <div
+                  style={{
+                    fontSize: "0.7rem",
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.06em",
+                    color: "#9ca3af",
+                    marginBottom: "0.4rem",
+                  }}
+                >
+                  Source Images
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "0.25rem",
+                  }}
+                >
+                  {segment.page_range.map((page) => (
+                    <span
+                      key={page}
+                      style={{
+                        fontSize: "0.72rem",
+                        color: "#374151",
+                        fontFamily: "monospace",
+                        wordBreak: "break-all",
+                        userSelect: "all",
+                      }}
+                    >
+                      {`${gallicaUrl}/f${page + gallicaOffset}.highres`}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
 
           <div style={{ marginTop: "0.5rem" }}>
             <button

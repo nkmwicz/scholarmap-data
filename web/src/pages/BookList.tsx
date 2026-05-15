@@ -816,6 +816,8 @@ export default function BookList() {
                     onUpdate={(updated) =>
                       setViewer((v) => v && { ...v, segment: updated })
                     }
+                    gallicaUrl={viewer.book?.gallica_url}
+                    gallicaOffset={viewer.book?.gallica_offset}
                   />
                 )}
               </>
