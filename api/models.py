@@ -36,6 +36,8 @@ class Book(Base):
         String, nullable=False, default="letters"
     )
     status: Mapped[str] = mapped_column(String, nullable=False, default="pending")
+    gallica_url: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    gallica_offset: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

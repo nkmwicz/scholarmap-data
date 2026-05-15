@@ -29,6 +29,8 @@ export interface Book {
   description: string | null;
   document_type: DocumentType;
   status: string;
+  gallica_url: string | null;
+  gallica_offset: number | null;
 }
 
 export interface OcrPage {
@@ -61,7 +63,7 @@ export interface Segment {
   markdown: string;
   page_range: number[];
   document_type: DocumentType;
-  cluster_labels: ClusterLabel[];
+  cluster_labels?: ClusterLabel[];
 }
 
 export interface RepresentativeSample {
@@ -95,6 +97,11 @@ export const api = {
   books: {
     list: () => request<Book[]>("/books"),
     get: (id: string) => request<Book>(`/books/${id}`),
+    setGallica: (id: string, gallica_url: string, gallica_offset: number) =>
+      request<Book>(`/books/${id}/gallica`, {
+        method: "PATCH",
+        body: JSON.stringify({ gallica_url, gallica_offset }),
+      }),
     create: (payload: {
       slug: string;
       title: string;

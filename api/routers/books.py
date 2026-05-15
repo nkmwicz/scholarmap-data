@@ -39,8 +39,15 @@ class BookOut(BaseModel):
     description: str | None
     document_type: str
     status: str
+    gallica_url: str | None
+    gallica_offset: int | None
 
     model_config = {"from_attributes": True}
+
+
+class GallicaUpdate(BaseModel):
+    gallica_url: str
+    gallica_offset: int
 
 
 @router.get("", response_model=list[BookOut])
@@ -77,6 +84,21 @@ async def get_book(book_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     book = result.scalar_one_or_none()
     if not book:
         raise HTTPException(404, "Book not found")
+    return book
+
+
+@router.patch("/{book_id}/gallica", response_model=BookOut)
+async def set_gallica(
+    book_id: uuid.UUID, payload: GallicaUpdate, db: AsyncSession = Depends(get_db)
+):
+    result = await db.execute(select(Book).where(Book.id == book_id))
+    book = result.scalar_one_or_none()
+    if not book:
+        raise HTTPException(404, "Book not found")
+    book.gallica_url = payload.gallica_url
+    book.gallica_offset = payload.gallica_offset
+    await db.commit()
+    await db.refresh(book)
     return book
 
 
