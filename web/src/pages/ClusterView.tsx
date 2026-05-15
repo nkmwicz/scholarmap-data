@@ -24,6 +24,7 @@ export default function ClusterView() {
   const [loadingSegs, setLoadingSegs] = useState(false);
 
   const [viewMode, setViewMode] = useState<"text" | "images">("text");
+  const [pageIdx, setPageIdx] = useState(0);
   const [clusterBarOpen, setClusterBarOpen] = useState(true);
   // Gallica calibration
   const [gallicaBannerOpen, setGallicaBannerOpen] = useState(true);
@@ -34,6 +35,10 @@ export default function ClusterView() {
   const [gallicaFolio, setGallicaFolio] = useState("");
   const [savingGallica, setSavingGallica] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    setPageIdx(0);
+  }, [selectedSegment?.id]);
 
   useEffect(() => {
     api.books
@@ -717,33 +722,102 @@ export default function ClusterView() {
                         viewMode === "images" && book?.gallica_url
                           ? "flex"
                           : "none",
+                      flexDirection: "column",
                     }}
                   >
-                    <PanZoom>
+                    {/* Carousel nav */}
+                    {selectedSegment.page_range.length > 0 && (
                       <div
                         style={{
-                          padding: "0.75rem 1rem",
                           display: "flex",
-                          flexDirection: "column",
-                          gap: "0.75rem",
+                          alignItems: "center",
+                          gap: "0.5rem",
+                          padding: "0.25rem 0.6rem",
+                          borderBottom: "1px solid #e5e7eb",
+                          flexShrink: 0,
                         }}
                       >
-                        {selectedSegment.page_range.map((page) => {
-                          const url = gallicaPageUrl(page);
-                          return url ? (
-                            <div key={page}>
-                              <div
-                                style={{
-                                  fontSize: "0.68rem",
-                                  color: "#9ca3af",
-                                  marginBottom: "0.25rem",
-                                }}
-                              >
-                                Folio {page + book!.gallica_offset!}
-                              </div>
+                        <button
+                          onClick={() => setPageIdx((i) => Math.max(0, i - 1))}
+                          disabled={pageIdx === 0}
+                          style={{
+                            padding: "0.15rem 0.5rem",
+                            fontSize: "0.8rem",
+                            border: "1px solid #e5e7eb",
+                            borderRadius: 4,
+                            background: pageIdx === 0 ? "#f9fafb" : "#fff",
+                            color: pageIdx === 0 ? "#d1d5db" : "#374151",
+                            cursor: pageIdx === 0 ? "default" : "pointer",
+                          }}
+                        >
+                          ◀
+                        </button>
+                        <span
+                          style={{
+                            fontSize: "0.72rem",
+                            color: "#6b7280",
+                            flex: 1,
+                            textAlign: "center",
+                          }}
+                        >
+                          Folio{" "}
+                          {selectedSegment.page_range[pageIdx] +
+                            (book?.gallica_offset ?? 0)}{" "}
+                          <span style={{ color: "#9ca3af" }}>
+                            ({pageIdx + 1} / {selectedSegment.page_range.length}
+                            )
+                          </span>
+                        </span>
+                        <button
+                          onClick={() =>
+                            setPageIdx((i) =>
+                              Math.min(
+                                selectedSegment.page_range.length - 1,
+                                i + 1,
+                              ),
+                            )
+                          }
+                          disabled={
+                            pageIdx === selectedSegment.page_range.length - 1
+                          }
+                          style={{
+                            padding: "0.15rem 0.5rem",
+                            fontSize: "0.8rem",
+                            border: "1px solid #e5e7eb",
+                            borderRadius: 4,
+                            background:
+                              pageIdx === selectedSegment.page_range.length - 1
+                                ? "#f9fafb"
+                                : "#fff",
+                            color:
+                              pageIdx === selectedSegment.page_range.length - 1
+                                ? "#d1d5db"
+                                : "#374151",
+                            cursor:
+                              pageIdx === selectedSegment.page_range.length - 1
+                                ? "default"
+                                : "pointer",
+                          }}
+                        >
+                          ▶
+                        </button>
+                      </div>
+                    )}
+                    {/* PanZoom viewport — key resets transform on page/segment change */}
+                    <PanZoom key={`${selectedSegment.id}-${pageIdx}`}>
+                      {selectedSegment.page_range.map((page, i) => {
+                        const url = gallicaPageUrl(page);
+                        return (
+                          <div
+                            key={page}
+                            style={{
+                              display: i === pageIdx ? "block" : "none",
+                            }}
+                          >
+                            {url && (
                               <img
                                 src={url}
-                                alt={`Folio ${page + book!.gallica_offset!}`}
+                                alt={`Folio ${page + (book?.gallica_offset ?? 0)}`}
                                 style={{
                                   width: "100%",
                                   display: "block",
@@ -751,10 +825,10 @@ export default function ClusterView() {
                                 }}
                                 draggable={false}
                               />
-                            </div>
-                          ) : null;
-                        })}
-                      </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </PanZoom>
                   </div>
                   <div
