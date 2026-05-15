@@ -149,5 +149,7 @@ export const api = {
     stats: (bookId: string) =>
       request<ClusterStats>(`/books/${bookId}/clusters/stats`),
     list: (bookId: string) => request<Cluster[]>(`/books/${bookId}/clusters`),
+    segments: (bookId: string, clusterId: string) =>
+      request<Segment[]>(`/books/${bookId}/clusters/${clusterId}/segments`),
   },
 };

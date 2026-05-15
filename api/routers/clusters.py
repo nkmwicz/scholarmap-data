@@ -38,6 +38,16 @@ class ClusterStats(BaseModel):
     subclusters: list[SubclusterInfo]  # one entry per parent that was split
 
 
+class ClusterSegmentOut(BaseModel):
+    id: uuid.UUID
+    segment_index: int
+    title: str
+    markdown: str
+    page_range: list[int]
+
+    model_config = {"from_attributes": True}
+
+
 @router.post("/{book_id}/cluster", status_code=202)
 async def trigger_cluster(
     book_id: uuid.UUID,
@@ -90,6 +100,26 @@ async def get_cluster_stats(book_id: uuid.UUID, db: AsyncSession = Depends(get_d
     ]
 
     return ClusterStats(parent_count=len(parents), subclusters=subclusters)
+
+
+@router.get(
+    "/{book_id}/clusters/{cluster_id}/segments", response_model=list[ClusterSegmentOut]
+)
+async def get_cluster_segments(
+    book_id: uuid.UUID,
+    cluster_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(Segment)
+        .join(SegmentChunk, SegmentChunk.segment_id == Segment.id)
+        .join(ClusterMembership, ClusterMembership.chunk_id == SegmentChunk.id)
+        .where(ClusterMembership.cluster_id == cluster_id)
+        .where(Segment.book_id == book_id)
+        .distinct()
+        .order_by(Segment.segment_index)
+    )
+    return result.scalars().all()
 
 
 @router.get("/{book_id}/clusters", response_model=list[ClusterOut])
