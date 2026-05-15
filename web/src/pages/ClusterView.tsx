@@ -20,6 +20,9 @@ export default function ClusterView() {
   const [segments, setSegments] = useState<Segment[]>([]);
   const [selectedSegment, setSelectedSegment] = useState<Segment | null>(null);
   const [loadingSegs, setLoadingSegs] = useState(false);
+  const [expandedClusters, setExpandedClusters] = useState<Set<string>>(
+    new Set(),
+  );
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -51,15 +54,26 @@ export default function ClusterView() {
       });
   };
 
+  const toggleExpand = (clusterId: string) => {
+    setExpandedClusters((prev) => {
+      const next = new Set(prev);
+      next.has(clusterId) ? next.delete(clusterId) : next.add(clusterId);
+      return next;
+    });
+  };
+
   const selectCluster = (c: Cluster) => {
     setSelectedCluster(c);
     setSelectedSub(null);
     fetchSegments(c.id);
   };
 
-  const selectSub = (sub: Cluster | null) => {
+  const selectSub = (sub: Cluster) => {
     setSelectedSub(sub);
-    fetchSegments(sub ? sub.id : selectedCluster!.id);
+    setSelectedCluster(
+      clusters.find((c) => c.id === sub.parent_cluster_id) ?? null,
+    );
+    fetchSegments(sub.id);
   };
 
   return (
@@ -106,7 +120,7 @@ export default function ClusterView() {
           overflow: "hidden",
         }}
       >
-        {/* Column 1 — Cluster list */}
+        {/* Column 1 — Cluster tree */}
         <div style={col}>
           <div
             style={{
@@ -121,133 +135,184 @@ export default function ClusterView() {
             {topClusters.length} Clusters
           </div>
           <div style={{ overflowY: "auto", flex: 1 }}>
-            {topClusters.map((c) => (
-              <button
-                key={c.id}
-                onClick={() => selectCluster(c)}
-                style={{
-                  width: "100%",
-                  textAlign: "left",
-                  background:
-                    selectedCluster?.id === c.id ? "#ede9fe" : "transparent",
-                  border: "none",
-                  borderBottom: "1px solid #f3f4f6",
-                  padding: "0.6rem 0.75rem",
-                  cursor: "pointer",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: "0.7rem",
-                    color: "#6b7280",
-                    marginBottom: "0.3rem",
-                  }}
-                >
-                  Cluster {c.cluster_index + 1}
-                </div>
-                <div
-                  style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem" }}
-                >
-                  {c.tags.map((tag) => (
-                    <span
-                      key={tag}
+            {topClusters.map((c) => {
+              const subs = subMap[c.id] ?? [];
+              const isExpanded = expandedClusters.has(c.id);
+              const isActive = selectedCluster?.id === c.id && !selectedSub;
+              return (
+                <div key={c.id}>
+                  {/* Parent row */}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "stretch",
+                      borderBottom: "1px solid #f3f4f6",
+                      background: isActive ? "#ede9fe" : "transparent",
+                    }}
+                  >
+                    {/* Expand toggle */}
+                    {subs.length > 0 ? (
+                      <button
+                        onClick={() => toggleExpand(c.id)}
+                        style={{
+                          border: "none",
+                          background: "transparent",
+                          cursor: "pointer",
+                          padding: "0 0.4rem",
+                          color: "#9ca3af",
+                          fontSize: "0.65rem",
+                          flexShrink: 0,
+                        }}
+                        title={isExpanded ? "Collapse" : "Expand sub-clusters"}
+                      >
+                        {isExpanded ? "▼" : "▶"}
+                      </button>
+                    ) : (
+                      <div style={{ width: "1.4rem", flexShrink: 0 }} />
+                    )}
+                    {/* Cluster name + tags */}
+                    <button
+                      onClick={() => selectCluster(c)}
                       style={{
-                        background: "#ede9fe",
-                        color: "#5b21b6",
-                        padding: "0.1rem 0.4rem",
-                        borderRadius: 9999,
-                        fontSize: "0.65rem",
-                        fontWeight: 500,
+                        flex: 1,
+                        textAlign: "left",
+                        background: "transparent",
+                        border: "none",
+                        padding: "0.6rem 0.5rem 0.6rem 0",
+                        cursor: "pointer",
                       }}
                     >
-                      {tag}
-                    </span>
-                  ))}
+                      <div
+                        style={{
+                          fontSize: "0.7rem",
+                          color: "#6b7280",
+                          marginBottom: "0.3rem",
+                        }}
+                      >
+                        Cluster {c.cluster_index + 1}
+                        {subs.length > 0 && (
+                          <span
+                            style={{ color: "#a5b4fc", marginLeft: "0.3rem" }}
+                          >
+                            · {subs.length} subs
+                          </span>
+                        )}
+                      </div>
+                      <div
+                        style={{
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: "0.25rem",
+                        }}
+                      >
+                        {c.tags.map((tag) => (
+                          <span
+                            key={tag}
+                            style={{
+                              background: isActive ? "#c4b5fd" : "#ede9fe",
+                              color: "#5b21b6",
+                              padding: "0.1rem 0.4rem",
+                              borderRadius: 9999,
+                              fontSize: "0.65rem",
+                              fontWeight: 500,
+                            }}
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    </button>
+                  </div>
+
+                  {/* Sub-cluster rows */}
+                  {isExpanded &&
+                    subs.map((sub) => {
+                      const isSubActive = selectedSub?.id === sub.id;
+                      return (
+                        <button
+                          key={sub.id}
+                          onClick={() => selectSub(sub)}
+                          style={{
+                            width: "100%",
+                            textAlign: "left",
+                            border: "none",
+                            borderBottom: "1px solid #f3f4f6",
+                            borderLeft: "3px solid #a5b4fc",
+                            padding: "0.45rem 0.6rem 0.45rem 0.75rem",
+                            cursor: "pointer",
+                            background: isSubActive ? "#dbeafe" : "#fafafa",
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              flexWrap: "wrap",
+                              gap: "0.2rem",
+                            }}
+                          >
+                            {sub.tags.map((tag) => (
+                              <span
+                                key={tag}
+                                style={{
+                                  background: isSubActive
+                                    ? "#93c5fd"
+                                    : "#dbeafe",
+                                  color: "#1e40af",
+                                  padding: "0.1rem 0.35rem",
+                                  borderRadius: 9999,
+                                  fontSize: "0.62rem",
+                                  fontWeight: 500,
+                                }}
+                              >
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        </button>
+                      );
+                    })}
                 </div>
-              </button>
-            ))}
+              );
+            })}
           </div>
         </div>
 
-        {/* Column 2 — Sub-cluster filter + letter list */}
+        {/* Column 2 — Letter list */}
         <div style={col}>
-          {selectedCluster ? (
+          {selectedCluster || selectedSub ? (
             <>
-              {/* Sub-cluster filter */}
-              {(subMap[selectedCluster.id] ?? []).length > 0 && (
-                <div
-                  style={{
-                    padding: "0.5rem 0.75rem",
-                    borderBottom: "1px solid #e5e7eb",
-                    flexShrink: 0,
-                  }}
-                >
-                  <div
-                    style={{
-                      fontSize: "0.7rem",
-                      color: "#6b7280",
-                      marginBottom: "0.35rem",
-                    }}
-                  >
-                    Filter by sub-cluster
-                  </div>
-                  <div
-                    style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem" }}
-                  >
-                    <button
-                      onClick={() => selectSub(null)}
-                      style={{
-                        padding: "0.15rem 0.5rem",
-                        borderRadius: 9999,
-                        fontSize: "0.7rem",
-                        fontWeight: 500,
-                        cursor: "pointer",
-                        background: !selectedSub ? "#1e40af" : "#e5e7eb",
-                        color: !selectedSub ? "#fff" : "#374151",
-                        border: "none",
-                      }}
-                    >
-                      All
-                    </button>
-                    {(subMap[selectedCluster.id] ?? []).map((sub) => (
-                      <button
-                        key={sub.id}
-                        onClick={() => selectSub(sub)}
-                        style={{
-                          padding: "0.15rem 0.5rem",
-                          borderRadius: 9999,
-                          fontSize: "0.7rem",
-                          fontWeight: 500,
-                          cursor: "pointer",
-                          background:
-                            selectedSub?.id === sub.id ? "#1e40af" : "#e5e7eb",
-                          color:
-                            selectedSub?.id === sub.id ? "#fff" : "#374151",
-                          border: "none",
-                        }}
-                      >
-                        {sub.tags[0] ?? `Sub ${sub.cluster_index + 1}`}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Letter count */}
+              {/* Header shows what's active */}
               <div
                 style={{
-                  padding: "0.4rem 0.75rem",
-                  borderBottom: "1px solid #f3f4f6",
-                  fontSize: "0.72rem",
-                  color: "#6b7280",
+                  padding: "0.5rem 0.75rem",
+                  borderBottom: "1px solid #e5e7eb",
                   flexShrink: 0,
                 }}
               >
-                {loadingSegs
-                  ? "Loading…"
-                  : `${segments.length} letter${
-                      segments.length !== 1 ? "s" : ""
-                    }`}
+                <div
+                  style={{
+                    fontSize: "0.72rem",
+                    fontWeight: 600,
+                    color: "#374151",
+                  }}
+                >
+                  {selectedSub
+                    ? (selectedSub.tags[0] ?? `Sub-cluster`)
+                    : `Cluster ${(selectedCluster?.cluster_index ?? 0) + 1} — all letters`}
+                </div>
+                <div
+                  style={{
+                    fontSize: "0.68rem",
+                    color: "#9ca3af",
+                    marginTop: "0.1rem",
+                  }}
+                >
+                  {loadingSegs
+                    ? "Loading…"
+                    : `${segments.length} letter${
+                        segments.length !== 1 ? "s" : ""
+                      }`}
+                </div>
               </div>
 
               {/* Letter list */}
@@ -302,7 +367,7 @@ export default function ClusterView() {
                 fontSize: "0.85rem",
               }}
             >
-              Select a cluster to browse letters.
+              Select a cluster or sub-cluster to browse letters.
             </div>
           )}
         </div>
