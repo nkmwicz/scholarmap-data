@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, type Book, type Cluster, type Segment } from "../api/client";
+import { PanZoom } from "../components/PanZoom";
 
 const col: React.CSSProperties = {
   display: "flex",
@@ -710,38 +711,51 @@ export default function ClusterView() {
                   </div>
                   <div
                     style={{
-                      overflowY: "auto",
                       flex: 1,
-                      padding: "0.75rem 1rem",
+                      minHeight: 0,
                       display:
                         viewMode === "images" && book?.gallica_url
                           ? "flex"
                           : "none",
-                      flexDirection: "column",
-                      gap: "0.75rem",
                     }}
                   >
-                    {selectedSegment.page_range.map((page) => {
-                      const url = gallicaPageUrl(page);
-                      return url ? (
-                        <div key={page}>
-                          <div
-                            style={{
-                              fontSize: "0.68rem",
-                              color: "#9ca3af",
-                              marginBottom: "0.25rem",
-                            }}
-                          >
-                            Folio {page + book!.gallica_offset!}
-                          </div>
-                          <img
-                            src={url}
-                            alt={`Folio ${page + book!.gallica_offset!}`}
-                            style={{ width: "100%", display: "block" }}
-                          />
-                        </div>
-                      ) : null;
-                    })}
+                    <PanZoom>
+                      <div
+                        style={{
+                          padding: "0.75rem 1rem",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "0.75rem",
+                        }}
+                      >
+                        {selectedSegment.page_range.map((page) => {
+                          const url = gallicaPageUrl(page);
+                          return url ? (
+                            <div key={page}>
+                              <div
+                                style={{
+                                  fontSize: "0.68rem",
+                                  color: "#9ca3af",
+                                  marginBottom: "0.25rem",
+                                }}
+                              >
+                                Folio {page + book!.gallica_offset!}
+                              </div>
+                              <img
+                                src={url}
+                                alt={`Folio ${page + book!.gallica_offset!}`}
+                                style={{
+                                  width: "100%",
+                                  display: "block",
+                                  pointerEvents: "none",
+                                }}
+                                draggable={false}
+                              />
+                            </div>
+                          ) : null;
+                        })}
+                      </div>
+                    </PanZoom>
                   </div>
                   <div
                     style={{
