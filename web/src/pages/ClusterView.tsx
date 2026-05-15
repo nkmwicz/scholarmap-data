@@ -21,10 +21,9 @@ export default function ClusterView() {
   const [segments, setSegments] = useState<Segment[]>([]);
   const [selectedSegment, setSelectedSegment] = useState<Segment | null>(null);
   const [loadingSegs, setLoadingSegs] = useState(false);
-  const [expandedClusters, setExpandedClusters] = useState<Set<string>>(
-    new Set(),
-  );
+
   const [viewMode, setViewMode] = useState<"text" | "images">("text");
+  const [clusterBarOpen, setClusterBarOpen] = useState(true);
   // Gallica calibration
   const [gallicaBannerOpen, setGallicaBannerOpen] = useState(true);
   const [firstSegmentPage, setFirstSegmentPage] = useState<number | null>(null);
@@ -104,14 +103,6 @@ export default function ClusterView() {
         setError(e.message);
         setLoadingSegs(false);
       });
-  };
-
-  const toggleExpand = (clusterId: string) => {
-    setExpandedClusters((prev) => {
-      const next = new Set(prev);
-      next.has(clusterId) ? next.delete(clusterId) : next.add(clusterId);
-      return next;
-    });
   };
 
   const selectCluster = (c: Cluster) => {
@@ -361,436 +352,428 @@ export default function ClusterView() {
         </div>
       )}
 
-      {/* Three-column body */}
+      {/* Browser body */}
       {(!book || !!book.gallica_url || !gallicaBannerOpen) && (
         <div
           style={{
-            display: "grid",
-            gridTemplateColumns: "220px 280px 1fr",
-            gap: "0.75rem",
+            display: "flex",
+            flexDirection: "column",
+            gap: "0.5rem",
             flex: 1,
             minHeight: 0,
             overflow: "hidden",
           }}
         >
-          {/* Column 1 — Cluster tree */}
-          <div style={col}>
+          {/* Selected cluster strip */}
+          {(selectedCluster || selectedSub) &&
+            (() => {
+              const active = selectedSub ?? selectedCluster!;
+              const parentIdx = selectedCluster!.cluster_index + 1;
+              const subIdx = selectedSub
+                ? (subMap[selectedCluster!.id]?.findIndex(
+                    (s) => s.id === selectedSub.id,
+                  ) ?? -1) + 1
+                : null;
+              const label = subIdx ? `${parentIdx}(${subIdx})` : `${parentIdx}`;
+              return (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                    padding: "0.25rem 0.75rem",
+                    background: selectedSub ? "#ede9fe" : "#f5f3ff",
+                    border: `1px solid ${selectedSub ? "#c4b5fd" : "#ddd6fe"}`,
+                    borderRadius: 9999,
+                    flexShrink: 0,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontWeight: 700,
+                      fontSize: "0.72rem",
+                      color: "#5b21b6",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {label}
+                  </span>
+                  <span style={{ fontSize: "0.72rem", color: "#374151" }}>
+                    {active.tags.slice(0, 5).join(" · ")}
+                  </span>
+                </div>
+              );
+            })()}
+
+          {/* Cluster bar */}
+          <div
+            style={{
+              display: "flex",
+              gap: "0.5rem",
+              flexShrink: 0,
+              alignItems: "flex-start",
+            }}
+          >
+            {/* Toggle button — fixed width */}
+            <div style={{ flexShrink: 0 }}>
+              <button
+                onClick={() => setClusterBarOpen((o) => !o)}
+                style={{
+                  padding: "0.2rem 0.55rem",
+                  fontSize: "0.68rem",
+                  fontWeight: 600,
+                  background: "#f3f4f6",
+                  color: "#6b7280",
+                  border: "1px solid #e5e7eb",
+                  borderRadius: 6,
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                  width: "6rem",
+                }}
+                title={clusterBarOpen ? "Hide clusters" : "Show clusters"}
+              >
+                {clusterBarOpen ? "▲" : "▼"} Clusters
+              </button>
+            </div>
+            {/* Cluster pills — flex-1, height controlled by open/collapsed */}
             <div
               style={{
-                padding: "0.6rem 0.75rem",
-                borderBottom: "1px solid #e5e7eb",
-                fontWeight: 600,
-                fontSize: "0.8rem",
-                color: "#374151",
-                flexShrink: 0,
+                display: "flex",
+                flex: 1,
+                gap: "0.35rem",
+                flexWrap: "wrap",
+                alignItems: "flex-start",
+                overflow: "hidden",
+                maxHeight: clusterBarOpen ? "20rem" : "2rem",
+                transition: "max-height 0.2s ease",
               }}
             >
-              {topClusters.length} Clusters
-            </div>
-            <div style={{ overflowY: "auto", flex: 1 }}>
               {topClusters.map((c) => {
-                const subs = subMap[c.id] ?? [];
-                const isExpanded = expandedClusters.has(c.id);
-                const isActive = selectedCluster?.id === c.id && !selectedSub;
+                const isActive = selectedCluster?.id === c.id;
                 return (
-                  <div key={c.id}>
-                    {/* Parent row */}
-                    <div
+                  <button
+                    key={c.id}
+                    onClick={() => selectCluster(c)}
+                    style={{
+                      padding: "0.2rem 0.65rem",
+                      fontSize: "0.72rem",
+                      fontWeight: isActive ? 600 : 400,
+                      background: isActive ? "#ede9fe" : "#f9fafb",
+                      color: isActive ? "#5b21b6" : "#374151",
+                      border: `1px solid ${isActive ? "#c4b5fd" : "#e5e7eb"}`,
+                      borderRadius: 9999,
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    <span
                       style={{
-                        display: "flex",
-                        alignItems: "stretch",
-                        borderBottom: "1px solid #f3f4f6",
-                        background: isActive ? "#ede9fe" : "transparent",
+                        color: isActive ? "#a78bfa" : "#9ca3af",
+                        fontSize: "0.65rem",
+                        marginRight: "0.3rem",
                       }}
                     >
-                      {/* Expand toggle */}
-                      {subs.length > 0 ? (
-                        <button
-                          onClick={() => toggleExpand(c.id)}
-                          style={{
-                            border: "none",
-                            background: "transparent",
-                            cursor: "pointer",
-                            padding: "0 0.4rem",
-                            color: "#9ca3af",
-                            fontSize: "0.65rem",
-                            flexShrink: 0,
-                          }}
-                          title={
-                            isExpanded ? "Collapse" : "Expand sub-clusters"
-                          }
-                        >
-                          {isExpanded ? "▼" : "▶"}
-                        </button>
-                      ) : (
-                        <div style={{ width: "1.4rem", flexShrink: 0 }} />
-                      )}
-                      {/* Cluster name + tags */}
-                      <button
-                        onClick={() => selectCluster(c)}
-                        style={{
-                          flex: 1,
-                          textAlign: "left",
-                          background: "transparent",
-                          border: "none",
-                          padding: "0.6rem 0.5rem 0.6rem 0",
-                          cursor: "pointer",
-                        }}
-                      >
-                        <div
-                          style={{
-                            fontSize: "0.7rem",
-                            color: "#6b7280",
-                            marginBottom: "0.3rem",
-                          }}
-                        >
-                          Cluster {c.cluster_index + 1}
-                          {subs.length > 0 && (
-                            <span
-                              style={{ color: "#a5b4fc", marginLeft: "0.3rem" }}
-                            >
-                              · {subs.length} subs
-                            </span>
-                          )}
-                        </div>
-                        <div
-                          style={{
-                            display: "flex",
-                            flexWrap: "wrap",
-                            gap: "0.25rem",
-                          }}
-                        >
-                          {c.tags.map((tag) => (
-                            <span
-                              key={tag}
-                              style={{
-                                background: isActive ? "#c4b5fd" : "#ede9fe",
-                                color: "#5b21b6",
-                                padding: "0.1rem 0.4rem",
-                                borderRadius: 9999,
-                                fontSize: "0.65rem",
-                                fontWeight: 500,
-                              }}
-                            >
-                              {tag}
-                            </span>
-                          ))}
-                        </div>
-                      </button>
-                    </div>
-
-                    {/* Sub-cluster rows */}
-                    {isExpanded &&
-                      subs.map((sub, subIdx) => {
-                        const isSubActive = selectedSub?.id === sub.id;
-                        return (
-                          <button
-                            key={sub.id}
-                            onClick={() => selectSub(sub)}
-                            style={{
-                              width: "100%",
-                              textAlign: "left",
-                              border: "none",
-                              borderBottom: "1px solid #f3f4f6",
-                              borderLeft: "3px solid #a5b4fc",
-                              padding: "0.45rem 0.6rem 0.45rem 0.75rem",
-                              cursor: "pointer",
-                              background: isSubActive ? "#dbeafe" : "#fafafa",
-                            }}
-                          >
-                            <div
-                              style={{
-                                fontSize: "0.62rem",
-                                color: "#6b7280",
-                                marginBottom: "0.2rem",
-                                fontWeight: 600,
-                              }}
-                            >
-                              Sub {subIdx + 1}
-                            </div>
-                            <div
-                              style={{
-                                display: "flex",
-                                flexWrap: "wrap",
-                                gap: "0.2rem",
-                              }}
-                            >
-                              {sub.tags.map((tag) => (
-                                <span
-                                  key={tag}
-                                  style={{
-                                    background: isSubActive
-                                      ? "#93c5fd"
-                                      : "#dbeafe",
-                                    color: "#1e40af",
-                                    padding: "0.1rem 0.35rem",
-                                    borderRadius: 9999,
-                                    fontSize: "0.62rem",
-                                    fontWeight: 500,
-                                  }}
-                                >
-                                  {tag}
-                                </span>
-                              ))}
-                            </div>
-                          </button>
-                        );
-                      })}
-                  </div>
+                      {c.cluster_index + 1}
+                    </span>
+                    {c.tags.slice(0, 2).join(" · ")}
+                  </button>
                 );
               })}
+              {selectedCluster &&
+                (subMap[selectedCluster.id]?.length ?? 0) > 0 && (
+                  <select
+                    value={selectedSub?.id ?? ""}
+                    onChange={(e) => {
+                      if (e.target.value === "") {
+                        selectCluster(selectedCluster);
+                      } else {
+                        const sub = subMap[selectedCluster.id].find(
+                          (s) => s.id === e.target.value,
+                        );
+                        if (sub) selectSub(sub);
+                      }
+                    }}
+                    style={{
+                      fontSize: "0.72rem",
+                      padding: "0.2rem 0.5rem",
+                      border: "1px solid #c4b5fd",
+                      borderRadius: 6,
+                      background: "#faf5ff",
+                      color: "#5b21b6",
+                      cursor: "pointer",
+                      marginLeft: "0.25rem",
+                    }}
+                  >
+                    <option value="">All letters in cluster</option>
+                    {subMap[selectedCluster.id].map((sub, i) => (
+                      <option key={sub.id} value={sub.id}>
+                        Sub {i + 1}: {sub.tags[0] ?? "—"}
+                      </option>
+                    ))}
+                  </select>
+                )}
             </div>
           </div>
 
-          {/* Column 2 — Letter list */}
-          <div style={col}>
-            {selectedCluster || selectedSub ? (
-              <>
-                {/* Header shows what's active */}
-                <div
-                  style={{
-                    padding: "0.5rem 0.75rem",
-                    borderBottom: "1px solid #e5e7eb",
-                    flexShrink: 0,
-                  }}
-                >
+          {/* Body: letter list + letter view */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "280px 1fr",
+              gap: "0.75rem",
+              flex: 1,
+              minHeight: 0,
+              overflow: "hidden",
+            }}
+          >
+            {/* Letter list */}
+            <div style={col}>
+              {selectedCluster || selectedSub ? (
+                <>
                   <div
                     style={{
-                      fontSize: "0.72rem",
-                      fontWeight: 600,
-                      color: "#374151",
+                      padding: "0.5rem 0.75rem",
+                      borderBottom: "1px solid #e5e7eb",
+                      flexShrink: 0,
                     }}
                   >
-                    {selectedSub
-                      ? (selectedSub.tags[0] ?? `Sub-cluster`)
-                      : `Cluster ${(selectedCluster?.cluster_index ?? 0) + 1} — all letters`}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: "0.68rem",
-                      color: "#9ca3af",
-                      marginTop: "0.1rem",
-                    }}
-                  >
-                    {loadingSegs
-                      ? "Loading…"
-                      : `${segments.length} letter${
-                          segments.length !== 1 ? "s" : ""
-                        }`}
-                  </div>
-                </div>
-
-                {/* Letter list */}
-                <div style={{ overflowY: "auto", flex: 1 }}>
-                  {segments.map((seg) => (
-                    <button
-                      key={seg.id}
-                      onClick={() => setSelectedSegment(seg)}
-                      style={{
-                        width: "100%",
-                        textAlign: "left",
-                        border: "none",
-                        borderBottom: "1px solid #f3f4f6",
-                        padding: "0.55rem 0.75rem",
-                        cursor: "pointer",
-                        background:
-                          selectedSegment?.id === seg.id
-                            ? "#f0f9ff"
-                            : "transparent",
-                      }}
-                    >
-                      <div
-                        style={{
-                          fontWeight: 500,
-                          fontSize: "0.78rem",
-                          color: "#111827",
-                        }}
-                      >
-                        {seg.title || `Letter ${seg.segment_index + 1}`}
-                      </div>
-                      {seg.page_range.length > 0 && (
-                        <div
-                          style={{
-                            fontSize: "0.68rem",
-                            color: "#9ca3af",
-                            marginTop: "0.1rem",
-                          }}
-                        >
-                          p. {seg.page_range[0]}–
-                          {seg.page_range[seg.page_range.length - 1]}
-                        </div>
-                      )}
-                      {(seg.cluster_labels?.length ?? 0) > 0 && (
-                        <div
-                          style={{
-                            marginTop: "0.25rem",
-                            display: "flex",
-                            flexWrap: "wrap",
-                            gap: "0.2rem",
-                          }}
-                        >
-                          {seg.cluster_labels?.map((lbl, i) => (
-                            <span
-                              key={i}
-                              style={{
-                                background: "#f3f4f6",
-                                color: "#374151",
-                                padding: "0.05rem 0.35rem",
-                                borderRadius: 9999,
-                                fontSize: "0.62rem",
-                                fontFamily: "monospace",
-                              }}
-                            >
-                              {lbl.sub_index !== null
-                                ? `${lbl.parent_index + 1}(${lbl.sub_index + 1})`
-                                : `${lbl.parent_index + 1}`}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <div
-                style={{
-                  padding: "1rem",
-                  color: "#9ca3af",
-                  fontSize: "0.85rem",
-                }}
-              >
-                Select a cluster or sub-cluster to browse letters.
-              </div>
-            )}
-          </div>
-
-          {/* Column 3 — Full letter */}
-          <div style={col}>
-            {selectedSegment ? (
-              <>
-                <div
-                  style={{
-                    padding: "0.75rem 1rem",
-                    borderBottom: "1px solid #e5e7eb",
-                    flexShrink: 0,
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "flex-start",
-                    gap: "1rem",
-                  }}
-                >
-                  <div>
-                    <h3 style={{ margin: "0 0 0.25rem", fontSize: "1rem" }}>
-                      {selectedSegment.title ||
-                        `Letter ${selectedSegment.segment_index + 1}`}
-                    </h3>
-                    {selectedSegment.page_range.length > 0 && (
-                      <span style={{ fontSize: "0.75rem", color: "#6b7280" }}>
-                        Pages {selectedSegment.page_range[0] + 1}–
-                        {selectedSegment.page_range[
-                          selectedSegment.page_range.length - 1
-                        ] + 1}
-                      </span>
-                    )}
-                  </div>
-                  {book?.gallica_url && (
                     <div
                       style={{
-                        display: "flex",
-                        border: "1px solid #e5e7eb",
-                        borderRadius: 6,
-                        overflow: "hidden",
-                        flexShrink: 0,
+                        fontSize: "0.72rem",
+                        fontWeight: 600,
+                        color: "#374151",
                       }}
                     >
-                      {(["text", "images"] as const).map((mode) => (
-                        <button
-                          key={mode}
-                          onClick={() => setViewMode(mode)}
-                          style={{
-                            padding: "0.2rem 0.65rem",
-                            fontSize: "0.72rem",
-                            fontWeight: 500,
-                            border: "none",
-                            cursor: "pointer",
-                            background:
-                              viewMode === mode ? "#1e40af" : "transparent",
-                            color: viewMode === mode ? "#fff" : "#374151",
-                          }}
-                        >
-                          {mode === "text" ? "OCR Text" : "Images"}
-                        </button>
-                      ))}
+                      {selectedSub
+                        ? (selectedSub.tags[0] ?? "Sub-cluster")
+                        : `Cluster ${
+                            (selectedCluster?.cluster_index ?? 0) + 1
+                          } — all letters`}
                     </div>
-                  )}
-                </div>
-
-                <div
-                  style={{
-                    overflowY: "auto",
-                    flex: 1,
-                    padding: "0.75rem 1rem",
-                    display:
-                      viewMode === "images" && book?.gallica_url
-                        ? "flex"
-                        : "none",
-                    flexDirection: "column",
-                    gap: "0.75rem",
-                  }}
-                >
-                  {selectedSegment.page_range.map((page) => {
-                    const url = gallicaPageUrl(page);
-                    return url ? (
-                      <div key={page}>
+                    <div
+                      style={{
+                        fontSize: "0.68rem",
+                        color: "#9ca3af",
+                        marginTop: "0.1rem",
+                      }}
+                    >
+                      {loadingSegs
+                        ? "Loading…"
+                        : `${segments.length} letter${
+                            segments.length !== 1 ? "s" : ""
+                          }`}
+                    </div>
+                  </div>
+                  <div style={{ overflowY: "auto", flex: 1 }}>
+                    {segments.map((seg) => (
+                      <button
+                        key={seg.id}
+                        onClick={() => setSelectedSegment(seg)}
+                        style={{
+                          width: "100%",
+                          textAlign: "left",
+                          border: "none",
+                          borderBottom: "1px solid #f3f4f6",
+                          padding: "0.55rem 0.75rem",
+                          cursor: "pointer",
+                          background:
+                            selectedSegment?.id === seg.id
+                              ? "#f0f9ff"
+                              : "transparent",
+                        }}
+                      >
                         <div
                           style={{
-                            fontSize: "0.68rem",
-                            color: "#9ca3af",
-                            marginBottom: "0.25rem",
+                            fontWeight: 500,
+                            fontSize: "0.78rem",
+                            color: "#111827",
                           }}
                         >
-                          Folio {page + book!.gallica_offset!}
+                          {seg.title || `Letter ${seg.segment_index + 1}`}
                         </div>
-                        <img
-                          src={url}
-                          alt={`Folio ${page + book!.gallica_offset!}`}
-                          style={{ width: "100%", display: "block" }}
-                        />
-                      </div>
-                    ) : null;
-                  })}
-                </div>
+                        {seg.page_range.length > 0 && (
+                          <div
+                            style={{
+                              fontSize: "0.68rem",
+                              color: "#9ca3af",
+                              marginTop: "0.1rem",
+                            }}
+                          >
+                            p. {seg.page_range[0]}–
+                            {seg.page_range[seg.page_range.length - 1]}
+                          </div>
+                        )}
+                        {(seg.cluster_labels?.length ?? 0) > 0 && (
+                          <div
+                            style={{
+                              marginTop: "0.25rem",
+                              display: "flex",
+                              flexWrap: "wrap",
+                              gap: "0.2rem",
+                            }}
+                          >
+                            {seg.cluster_labels?.map((lbl, i) => (
+                              <span
+                                key={i}
+                                style={{
+                                  background: "#f3f4f6",
+                                  color: "#374151",
+                                  padding: "0.05rem 0.35rem",
+                                  borderRadius: 9999,
+                                  fontSize: "0.62rem",
+                                  fontFamily: "monospace",
+                                }}
+                              >
+                                {lbl.sub_index !== null
+                                  ? `${lbl.parent_index + 1}(${lbl.sub_index + 1})`
+                                  : `${lbl.parent_index + 1}`}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : (
                 <div
                   style={{
-                    overflowY: "auto",
-                    flex: 1,
-                    padding: "1rem 1.25rem",
-                    display:
-                      viewMode === "text" || !book?.gallica_url
-                        ? "block"
-                        : "none",
-                    fontFamily: "Georgia, serif",
-                    fontSize: "0.9rem",
-                    lineHeight: 1.8,
-                    color: "#1f2937",
-                    whiteSpace: "pre-wrap",
+                    padding: "1rem",
+                    color: "#9ca3af",
+                    fontSize: "0.85rem",
                   }}
                 >
-                  {selectedSegment.markdown}
+                  Select a cluster above to browse letters.
                 </div>
-              </>
-            ) : (
-              <div
-                style={{
-                  padding: "1rem",
-                  color: "#9ca3af",
-                  fontSize: "0.85rem",
-                }}
-              >
-                Select a letter to read it.
-              </div>
-            )}
+              )}
+            </div>
+
+            {/* Letter view */}
+            <div style={col}>
+              {selectedSegment ? (
+                <>
+                  <div
+                    style={{
+                      padding: "0.75rem 1rem",
+                      borderBottom: "1px solid #e5e7eb",
+                      flexShrink: 0,
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "flex-start",
+                      gap: "1rem",
+                    }}
+                  >
+                    <div>
+                      <h3 style={{ margin: "0 0 0.25rem", fontSize: "1rem" }}>
+                        {selectedSegment.title ||
+                          `Letter ${selectedSegment.segment_index + 1}`}
+                      </h3>
+                      {selectedSegment.page_range.length > 0 && (
+                        <span style={{ fontSize: "0.75rem", color: "#6b7280" }}>
+                          Pages {selectedSegment.page_range[0] + 1}–
+                          {selectedSegment.page_range[
+                            selectedSegment.page_range.length - 1
+                          ] + 1}
+                        </span>
+                      )}
+                    </div>
+                    {book?.gallica_url && (
+                      <div
+                        style={{
+                          display: "flex",
+                          border: "1px solid #e5e7eb",
+                          borderRadius: 6,
+                          overflow: "hidden",
+                          flexShrink: 0,
+                        }}
+                      >
+                        {(["text", "images"] as const).map((mode) => (
+                          <button
+                            key={mode}
+                            onClick={() => setViewMode(mode)}
+                            style={{
+                              padding: "0.2rem 0.65rem",
+                              fontSize: "0.72rem",
+                              fontWeight: 500,
+                              border: "none",
+                              cursor: "pointer",
+                              background:
+                                viewMode === mode ? "#1e40af" : "transparent",
+                              color: viewMode === mode ? "#fff" : "#374151",
+                            }}
+                          >
+                            {mode === "text" ? "OCR Text" : "Images"}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div
+                    style={{
+                      overflowY: "auto",
+                      flex: 1,
+                      padding: "0.75rem 1rem",
+                      display:
+                        viewMode === "images" && book?.gallica_url
+                          ? "flex"
+                          : "none",
+                      flexDirection: "column",
+                      gap: "0.75rem",
+                    }}
+                  >
+                    {selectedSegment.page_range.map((page) => {
+                      const url = gallicaPageUrl(page);
+                      return url ? (
+                        <div key={page}>
+                          <div
+                            style={{
+                              fontSize: "0.68rem",
+                              color: "#9ca3af",
+                              marginBottom: "0.25rem",
+                            }}
+                          >
+                            Folio {page + book!.gallica_offset!}
+                          </div>
+                          <img
+                            src={url}
+                            alt={`Folio ${page + book!.gallica_offset!}`}
+                            style={{ width: "100%", display: "block" }}
+                          />
+                        </div>
+                      ) : null;
+                    })}
+                  </div>
+                  <div
+                    style={{
+                      overflowY: "auto",
+                      flex: 1,
+                      padding: "1rem 1.25rem",
+                      display:
+                        viewMode === "text" || !book?.gallica_url
+                          ? "block"
+                          : "none",
+                      fontFamily: "Georgia, serif",
+                      fontSize: "0.9rem",
+                      lineHeight: 1.8,
+                      color: "#1f2937",
+                      whiteSpace: "pre-wrap",
+                    }}
+                  >
+                    {selectedSegment.markdown}
+                  </div>
+                </>
+              ) : (
+                <div
+                  style={{
+                    padding: "1rem",
+                    color: "#9ca3af",
+                    fontSize: "0.85rem",
+                  }}
+                >
+                  Select a letter to read it.
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
