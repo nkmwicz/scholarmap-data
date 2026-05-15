@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { api, type Book, type Cluster, type Segment } from "../api/client";
 import { PanZoom } from "../components/PanZoom";
 import { SegmentSummaryPanel } from "../components/SegmentSummaryPanel";
+import { Neo4jToggleButton } from "../components/Neo4jToggleButton";
 
 const col: React.CSSProperties = {
   display: "flex",
@@ -686,18 +687,68 @@ export default function ClusterView() {
                         </span>
                       )}
                     </div>
-                    {book?.gallica_url && (
-                      <div
-                        style={{
-                          display: "flex",
-                          border: "1px solid #e5e7eb",
-                          borderRadius: 6,
-                          overflow: "hidden",
-                          flexShrink: 0,
-                        }}
-                      >
-                        {(["text", "images", "summary"] as const).map(
-                          (mode) => (
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.5rem",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <Neo4jToggleButton
+                        segment={selectedSegment}
+                        bookId={bookId!}
+                        onUpdate={(updated) => setSelectedSegment(updated)}
+                      />
+                      {book?.gallica_url && (
+                        <div
+                          style={{
+                            display: "flex",
+                            border: "1px solid #e5e7eb",
+                            borderRadius: 6,
+                            overflow: "hidden",
+                            flexShrink: 0,
+                          }}
+                        >
+                          {(["text", "images", "summary"] as const).map(
+                            (mode) => (
+                              <button
+                                key={mode}
+                                onClick={() => setViewMode(mode)}
+                                style={{
+                                  padding: "0.2rem 0.65rem",
+                                  fontSize: "0.72rem",
+                                  fontWeight: 500,
+                                  border: "none",
+                                  cursor: "pointer",
+                                  background:
+                                    viewMode === mode
+                                      ? "#1e40af"
+                                      : "transparent",
+                                  color: viewMode === mode ? "#fff" : "#374151",
+                                }}
+                              >
+                                {mode === "text"
+                                  ? "OCR Text"
+                                  : mode === "images"
+                                    ? "Images"
+                                    : "Summary"}
+                              </button>
+                            ),
+                          )}
+                        </div>
+                      )}
+                      {!book?.gallica_url && (
+                        <div
+                          style={{
+                            display: "flex",
+                            border: "1px solid #e5e7eb",
+                            borderRadius: 6,
+                            overflow: "hidden",
+                            flexShrink: 0,
+                          }}
+                        >
+                          {(["text", "summary"] as const).map((mode) => (
                             <button
                               key={mode}
                               onClick={() => setViewMode(mode)}
@@ -712,46 +763,12 @@ export default function ClusterView() {
                                 color: viewMode === mode ? "#fff" : "#374151",
                               }}
                             >
-                              {mode === "text"
-                                ? "OCR Text"
-                                : mode === "images"
-                                  ? "Images"
-                                  : "Summary"}
+                              {mode === "text" ? "OCR Text" : "Summary"}
                             </button>
-                          ),
-                        )}
-                      </div>
-                    )}
-                    {!book?.gallica_url && (
-                      <div
-                        style={{
-                          display: "flex",
-                          border: "1px solid #e5e7eb",
-                          borderRadius: 6,
-                          overflow: "hidden",
-                          flexShrink: 0,
-                        }}
-                      >
-                        {(["text", "summary"] as const).map((mode) => (
-                          <button
-                            key={mode}
-                            onClick={() => setViewMode(mode)}
-                            style={{
-                              padding: "0.2rem 0.65rem",
-                              fontSize: "0.72rem",
-                              fontWeight: 500,
-                              border: "none",
-                              cursor: "pointer",
-                              background:
-                                viewMode === mode ? "#1e40af" : "transparent",
-                              color: viewMode === mode ? "#fff" : "#374151",
-                            }}
-                          >
-                            {mode === "text" ? "OCR Text" : "Summary"}
-                          </button>
-                        ))}
-                      </div>
-                    )}
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <div
                     style={{

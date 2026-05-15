@@ -10,6 +10,7 @@ import {
 import StatusBadge from "../components/StatusBadge";
 import { PanZoom } from "../components/PanZoom";
 import { SegmentSummaryPanel } from "../components/SegmentSummaryPanel";
+import { Neo4jToggleButton } from "../components/Neo4jToggleButton";
 
 export default function BookList() {
   const [books, setBooks] = useState<Book[]>([]);
@@ -617,6 +618,15 @@ export default function BookList() {
                     </button>
                   ))}
                 </div>
+                {viewer.segment && (
+                  <Neo4jToggleButton
+                    segment={viewer.segment}
+                    bookId={viewer.result.book_id}
+                    onUpdate={(updated) =>
+                      setViewer((v) => v && { ...v, segment: updated })
+                    }
+                  />
+                )}
                 <button
                   onClick={() => setViewer(null)}
                   style={{

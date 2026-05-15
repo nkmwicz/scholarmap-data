@@ -52,7 +52,6 @@ function SectionList({ title, items }: { title: string; items: string[] }) {
 export function SegmentSummaryPanel({ segment, bookId, onUpdate }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [toggling, setToggling] = useState(false);
 
   const isLetter = segment.document_type === "letters";
   const summary = segment.ai_summary as (LetterSummary & ChapterSummary) | null;
@@ -70,66 +69,8 @@ export function SegmentSummaryPanel({ segment, bookId, onUpdate }: Props) {
     }
   };
 
-  const handleNeo4jToggle = async () => {
-    setToggling(true);
-    try {
-      const updated = await api.segments.patch(bookId, segment.id, {
-        neo4j_entered: !segment.neo4j_entered,
-      });
-      onUpdate(updated);
-    } catch (e: any) {
-      setError(e.message);
-    } finally {
-      setToggling(false);
-    }
-  };
-
   return (
     <div style={{ flex: 1, overflowY: "auto", padding: "1rem 1.25rem" }}>
-      {/* Neo4j toggle — always visible */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "0.6rem",
-          marginBottom: "1.1rem",
-          paddingBottom: "0.85rem",
-          borderBottom: "1px solid #f3f4f6",
-        }}
-      >
-        <label
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "0.45rem",
-            cursor: toggling ? "wait" : "pointer",
-            userSelect: "none",
-          }}
-        >
-          <input
-            type="checkbox"
-            checked={segment.neo4j_entered}
-            onChange={handleNeo4jToggle}
-            disabled={toggling}
-            style={{
-              width: 15,
-              height: 15,
-              accentColor: "#059669",
-              cursor: "inherit",
-            }}
-          />
-          <span
-            style={{
-              fontSize: "0.8rem",
-              color: segment.neo4j_entered ? "#059669" : "#6b7280",
-              fontWeight: segment.neo4j_entered ? 600 : 400,
-            }}
-          >
-            {segment.neo4j_entered ? "✓ Entered in Neo4j" : "Not yet in Neo4j"}
-          </span>
-        </label>
-      </div>
-
       {/* No summary yet */}
       {!summary && !loading && (
         <div
