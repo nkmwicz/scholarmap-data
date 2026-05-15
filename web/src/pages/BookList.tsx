@@ -744,12 +744,8 @@ export default function BookList() {
                       key={`${viewer.result.segment_id}-${viewer.pageIdx}`}
                     >
                       {viewer.segment.page_range.map((page, i) => {
-                        const base = viewer.book!.gallica_url!.replace(
-                          /\/$/,
-                          "",
-                        );
                         const folio = page + (viewer.book!.gallica_offset ?? 0);
-                        const url = `${base}/f${folio}/full/full/0/native.jpg`;
+                        const url = `${viewer.book!.gallica_url!.replace(/\/$/, "")}/f${folio}.highres`;
                         return (
                           <div
                             key={page}
