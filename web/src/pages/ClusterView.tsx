@@ -130,7 +130,7 @@ export default function ClusterView() {
       style={{
         display: "flex",
         flexDirection: "column",
-        height: "calc(100svh - 5rem)",
+        height: "calc(100svh - 6.5rem)",
         gap: "0.5rem",
         overflow: "hidden",
       }}
