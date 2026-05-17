@@ -72,6 +72,7 @@ export interface SearchResult {
 }
 
 export interface LetterSummary {
+  /** V1 — flat structure, no version field */
   author: string;
   author_location: string;
   recipient: string;
@@ -81,6 +82,25 @@ export interface LetterSummary {
   people_referenced: string[];
   places_referenced: string[];
   events_referenced: string[];
+}
+
+export interface NoteExtract {
+  summary: string;
+  people_referenced: string[];
+  places_referenced: string[];
+  events_referenced: string[];
+}
+
+export interface LetterSummaryV2 {
+  /** V2 — hierarchical with per-matter notes */
+  version: 2;
+  author: string;
+  author_location: string;
+  recipient: string;
+  recipient_location: string;
+  date: string;
+  summary: string;
+  notes: NoteExtract[];
 }
 
 export interface ChapterSummary {
@@ -98,7 +118,7 @@ export interface Segment {
   page_range: number[];
   document_type: DocumentType;
   cluster_labels?: ClusterLabel[];
-  ai_summary: LetterSummary | ChapterSummary | null;
+  ai_summary: LetterSummary | LetterSummaryV2 | ChapterSummary | null;
   neo4j_entered: boolean;
 }
 

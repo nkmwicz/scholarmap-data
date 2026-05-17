@@ -3,6 +3,8 @@ import {
   api,
   type Segment,
   type LetterSummary,
+  type LetterSummaryV2,
+  type NoteExtract,
   type ChapterSummary,
 } from "../api/client";
 
@@ -62,7 +64,16 @@ export function SegmentSummaryPanel({
   const [error, setError] = useState("");
 
   const isLetter = segment.document_type === "letters";
-  const summary = segment.ai_summary as (LetterSummary & ChapterSummary) | null;
+  const rawSummary = segment.ai_summary;
+  const isV2 =
+    rawSummary != null && (rawSummary as LetterSummaryV2).version === 2;
+  const summaryV2 = isV2 ? (rawSummary as LetterSummaryV2) : null;
+  // v1 fallback — flat shape
+  const summaryV1 =
+    !isV2 && rawSummary != null
+      ? (rawSummary as LetterSummary & ChapterSummary)
+      : null;
+  const summary = rawSummary; // for null-check convenience
 
   const handleGenerate = async (force = false) => {
     setLoading(true);
@@ -146,7 +157,7 @@ export function SegmentSummaryPanel({
       {/* Summary */}
       {summary && !loading && (
         <>
-          {/* Letter-specific fields */}
+          {/* Letter metadata grid — both v1 and v2 */}
           {isLetter && (
             <div
               style={{
@@ -194,8 +205,8 @@ export function SegmentSummaryPanel({
             </div>
           )}
 
-          {/* Summary text */}
-          {summary.summary && (
+          {/* Overall summary */}
+          {(summary as LetterSummary).summary && (
             <div style={{ marginBottom: "0.9rem" }}>
               <div
                 style={{
@@ -217,23 +228,100 @@ export function SegmentSummaryPanel({
                   lineHeight: 1.65,
                 }}
               >
-                {summary.summary}
+                {(summary as LetterSummary).summary}
               </p>
             </div>
           )}
 
-          <SectionList
-            title="People Referenced"
-            items={summary.people_referenced}
-          />
-          <SectionList
-            title="Places Referenced"
-            items={summary.places_referenced}
-          />
-          <SectionList
-            title="Events Referenced"
-            items={summary.events_referenced}
-          />
+          {/* ── V2: per-matter notes ── */}
+          {isV2 && summaryV2 && summaryV2.notes.length > 0 && (
+            <div style={{ marginBottom: "0.9rem" }}>
+              <div
+                style={{
+                  fontSize: "0.7rem",
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.06em",
+                  color: "#9ca3af",
+                  marginBottom: "0.5rem",
+                }}
+              >
+                Notes ({summaryV2.notes.length})
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0.75rem",
+                }}
+              >
+                {summaryV2.notes.map((note: NoteExtract, i: number) => (
+                  <div
+                    key={i}
+                    style={{
+                      padding: "0.65rem 0.75rem",
+                      borderRadius: 6,
+                      border: "1px solid #e5e7eb",
+                      background: "#f9fafb",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: "0.68rem",
+                        fontWeight: 700,
+                        color: "#6b7280",
+                        marginBottom: "0.3rem",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.05em",
+                      }}
+                    >
+                      Matter {i + 1}
+                    </div>
+                    <p
+                      style={{
+                        margin: "0 0 0.5rem",
+                        fontSize: "0.82rem",
+                        color: "#1f2937",
+                        lineHeight: 1.6,
+                      }}
+                    >
+                      {note.summary}
+                    </p>
+                    <SectionList
+                      title="People"
+                      items={note.people_referenced}
+                    />
+                    <SectionList
+                      title="Places"
+                      items={note.places_referenced}
+                    />
+                    <SectionList
+                      title="Events"
+                      items={note.events_referenced}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── V1 fallback: flat entity lists ── */}
+          {!isV2 && summaryV1 && (
+            <>
+              <SectionList
+                title="People Referenced"
+                items={summaryV1.people_referenced}
+              />
+              <SectionList
+                title="Places Referenced"
+                items={summaryV1.places_referenced}
+              />
+              <SectionList
+                title="Events Referenced"
+                items={summaryV1.events_referenced}
+              />
+            </>
+          )}
 
           {/* Gallica source image links */}
           {gallicaUrl &&

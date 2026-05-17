@@ -27,6 +27,8 @@ class ClusterGeminiModel(BaseModel):
 
 
 class LetterSummary(BaseModel):
+    """V1 — kept for backward compatibility with existing JSONB records."""
+
     author: str
     author_location: str
     recipient_location: str
@@ -36,6 +38,26 @@ class LetterSummary(BaseModel):
     people_referenced: list[str]
     places_referenced: list[str]
     events_referenced: list[str]
+
+
+class NoteExtract(BaseModel):
+    summary: str
+    people_referenced: list[str]
+    places_referenced: list[str]
+    events_referenced: list[str]
+
+
+class LetterSummaryV2(BaseModel):
+    """V2 — hierarchical: letter metadata + sequential discrete-matter notes."""
+
+    version: int = 2
+    author: str
+    author_location: str
+    recipient_location: str
+    recipient: str
+    date: str
+    summary: str
+    notes: list[NoteExtract]
 
 
 class ChapterSummary(BaseModel):
@@ -162,24 +184,43 @@ SAMPLES:
 
 def get_mistral_summary(
     text: str,
-) -> LetterSummary:
+) -> LetterSummaryV2:
     api_key = os.environ["MISTRAL_KEY"]
     MODEL_ID = "mistral-large-latest"
     client = Mistral(api_key=api_key)
     system_prompt: str = (
-        """You are an early modern historian. Your task is to read the following letter and extract the key information about the letter's author, recipient, date, summary, and any people, places, or events referenced in the letter. The letter is written in 16th-century English and may contain archaic language and spelling. Focus on the underlying meaning and intent of the letter rather than getting caught up in the orthographic quirks of the period."""
+        "You are an expert early modern historian and archivist. "
+        "Your task is to analyse a letter and extract two layers of information: "
+        "(1) letter-level metadata, and "
+        "(2) a sequential breakdown ofthe principal matters, pieces of business, or news the letter substantively addresses — "
+        "what a secretary or archivist would record as the letter's main 'articles'."
+        "The letter may be written in 16th-century English, French, Latin, Italian, or Turkish "
+        "and may contain archaic language and spelling. "
+        "Focus on the underlying meaning and intent rather than orthographic quirks."
     )
-    prompt = f"""Read the following letter and extract the key information about the letter's author, recipient, date, summary, and any people, places, or events referenced in the letter. The letter is written in 16th-century English, French, Latin, Italian, or Turkish and may contain archaic language and spelling. Return the following informaiton:
-    
+    prompt = f"""Read the following letter and extract two levels of information.
+
+LETTER-LEVEL METADATA:
 1. Author: Who wrote the letter?
-2. Author Location: Where was the author located when they wrote the letter?
-3. Recipient: Who was the letter addressed to?
-4. Recipient Location: Where was the recipient located when they received the letter?
+2. Author Location: Where was the author writing from?
+3. Recipient: Who is the letter addressed to?
+4. Recipient Location: Where was the recipient?
 5. Date: When was the letter written?
-6. Summary: What is the main point or purpose of the letter?
-7. People Referenced: List any people mentioned in the letter.
-8. Places Referenced: List any places mentioned in the letter.
-9. Events Referenced: List any events mentioned in the letter.
+6. Summary: Overview of the letter's main purpose.
+
+NOTE-LEVEL — DISCRETE MATTERS (in the order they appear):
+Identify each distinct topic, news item, or piece of business the writer discusses.
+For each note provide:
+- summary: A few sentences describing this specific matter
+- people_referenced: people mentioned in this matter
+- places_referenced: places mentioned in this matter
+- events_referenced: events mentioned in this matter
+
+RULES:
+- A letter may have 1 to 7 notes. Most letters have 2-4.
+- Do NOT create notes for epistolary boilerplate (greetings, closings, expressions of loyalty).
+- Each note must represent a substantively different matter from the others.
+- If the entire letter concerns a single matter, return exactly one note.
 
 LETTER:
 {text}
@@ -188,30 +229,27 @@ LETTER:
     try:
         messages = [
             {"role": "system", "content": system_prompt},
-            {
-                "role": "user",
-                "content": prompt,
-            },
+            {"role": "user", "content": prompt},
         ]
         chat_response = client.chat.parse(
             model=MODEL_ID,
             messages=messages,
-            response_format=LetterSummary,
+            response_format=LetterSummaryV2,
         )
-        summary: LetterSummary = chat_response.choices[0].message.parsed
+        summary: LetterSummaryV2 = chat_response.choices[0].message.parsed
+
+        summary.version = 2  # Explicitly set verion to 2 for clarity.
         return summary
     except Exception as e:
         print(f"Error occurred while summarizing letter: {e}")
-        return LetterSummary(
+        return LetterSummaryV2(
             author="",
             author_location="",
             recipient_location="",
             recipient="",
             date="",
             summary="",
-            people_referenced=[],
-            places_referenced=[],
-            events_referenced=[],
+            notes=[],
         )
 
 
