@@ -50,6 +50,8 @@ class ClusterSegmentOut(BaseModel):
     markdown: str
     page_range: list[int]
     cluster_labels: list[ClusterLabel]
+    ai_summary: dict | None = None
+    neo4j_entered: bool = False
 
 
 @router.post("/{book_id}/cluster", status_code=202)
@@ -202,6 +204,8 @@ async def get_cluster_segments(
                 markdown=seg.markdown or "",
                 page_range=seg.page_range or [],
                 cluster_labels=labels,
+                ai_summary=seg.ai_summary,
+                neo4j_entered=seg.neo4j_entered or False,
             )
         )
     return out

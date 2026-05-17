@@ -594,12 +594,34 @@ export default function ClusterView() {
                       >
                         <div
                           style={{
-                            fontWeight: 500,
-                            fontSize: "0.78rem",
-                            color: "#111827",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.35rem",
                           }}
                         >
-                          {seg.title || `Letter ${seg.segment_index + 1}`}
+                          <span
+                            style={{
+                              fontWeight: 500,
+                              fontSize: "0.78rem",
+                              color: "#111827",
+                              flex: 1,
+                            }}
+                          >
+                            {seg.title || `Letter ${seg.segment_index + 1}`}
+                          </span>
+                          {seg.neo4j_entered && (
+                            <span
+                              title="In Neo4j"
+                              style={{
+                                fontSize: "0.65rem",
+                                color: "#16a34a",
+                                flexShrink: 0,
+                                lineHeight: 1,
+                              }}
+                            >
+                              ✓
+                            </span>
+                          )}
                         </div>
                         {seg.page_range.length > 0 && (
                           <div
