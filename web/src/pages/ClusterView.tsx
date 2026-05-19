@@ -720,7 +720,14 @@ export default function ClusterView() {
                       <Neo4jToggleButton
                         segment={selectedSegment}
                         bookId={bookId!}
-                        onUpdate={(updated) => setSelectedSegment(updated)}
+                        onUpdate={(updated) => {
+                          setSelectedSegment(updated);
+                          setSegments((prev) =>
+                            prev.map((s) =>
+                              s.id === updated.id ? updated : s,
+                            ),
+                          );
+                        }}
                       />
                       {book?.gallica_url && (
                         <div
