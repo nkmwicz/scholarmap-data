@@ -9,6 +9,7 @@ export default function BookDetail() {
   const [error, setError] = useState("");
   const [uploading, setUploading] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [ocrMessage, setOcrMessage] = useState<string | null>(null);
   const [boundaryCount, setBoundaryCount] = useState<number | null>(null);
   const [embedStats, setEmbedStats] = useState<{
     segment_count: number;
@@ -77,12 +78,28 @@ export default function BookDetail() {
     return () => clearInterval(interval);
   }, [bookId, book?.status]);
 
+  // Poll OCR progress message while OCR is running
+  useEffect(() => {
+    if (!bookId || book?.status !== "ocr_processing") {
+      setOcrMessage(null);
+      return;
+    }
+    const interval = setInterval(() => {
+      api.books
+        .ocrProgress(bookId)
+        .then((r) => setOcrMessage(r.message))
+        .catch(() => {});
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [bookId, book?.status]);
+
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !bookId) return;
     setUploading(true);
     try {
       await api.books.uploadPdf(bookId, file);
+      setBook((prev) => (prev ? { ...prev, status: "ocr_processing" } : prev));
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -156,7 +173,17 @@ export default function BookDetail() {
           <h3 style={{ margin: "0 0 0.5rem" }}>
             1 · OCR{ocrDone && " (Complete)"}
           </h3>
-          {ocrDone ? (
+          {book.status === "ocr_processing" ? (
+            <p
+              style={{
+                margin: "0 0 0.75rem",
+                color: "#92400e",
+                fontSize: "0.875rem",
+              }}
+            >
+              ⏳ {ocrMessage ?? "Processing…"}
+            </p>
+          ) : ocrDone ? (
             <p
               style={{
                 margin: "0 0 0.75rem",

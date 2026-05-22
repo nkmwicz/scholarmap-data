@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.db import get_db
 from api.models import Book, ExcludedLine, ExcludedPage, OcrPage
-from api.services.ocr import run_ocr
+from api.services.ocr import get_ocr_progress, run_ocr
 
 router = APIRouter()
 
@@ -120,6 +120,12 @@ async def upload_pdf(
     pdf_bytes = await pdf.read()
     background_tasks.add_task(run_ocr, book_id, pdf_bytes, db)
     return {"status": "ocr_started"}
+
+
+@router.get("/{book_id}/ocr/progress")
+async def get_ocr_progress_endpoint(book_id: uuid.UUID):
+    """Return the current in-memory OCR progress message for a book (no DB query)."""
+    return {"message": get_ocr_progress(str(book_id))}
 
 
 @router.get("/{book_id}/pages")

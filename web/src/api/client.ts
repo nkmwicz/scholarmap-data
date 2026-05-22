@@ -187,6 +187,8 @@ export const api = {
       });
     },
     pages: (id: string) => request<OcrPage[]>(`/books/${id}/pages`),
+    ocrProgress: (id: string) =>
+      request<{ message: string | null }>(`/books/${id}/ocr/progress`),
     downloadMarkdown: async (id: string, slug: string) => {
       const res = await fetch(`${BASE}/books/${id}/ocr/markdown`);
       if (!res.ok) {
