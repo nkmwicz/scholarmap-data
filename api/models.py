@@ -51,6 +51,9 @@ class Book(Base):
     excluded_pages: Mapped[list["ExcludedPage"]] = relationship(
         "ExcludedPage", back_populates="book", cascade="all, delete-orphan"
     )
+    excluded_lines: Mapped[list["ExcludedLine"]] = relationship(
+        "ExcludedLine", back_populates="book", cascade="all, delete-orphan"
+    )
     boundaries: Mapped[list["SegmentBoundary"]] = relationship(
         "SegmentBoundary", back_populates="book", cascade="all, delete-orphan"
     )
@@ -86,6 +89,18 @@ class ExcludedPage(Base):
     page_index: Mapped[int] = mapped_column(Integer, primary_key=True)
 
     book: Mapped["Book"] = relationship("Book", back_populates="excluded_pages")
+
+
+class ExcludedLine(Base):
+    __tablename__ = "excluded_lines"
+
+    book_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("books.id", ondelete="CASCADE"), primary_key=True
+    )
+    page_index: Mapped[int] = mapped_column(Integer, primary_key=True)
+    line_index: Mapped[int] = mapped_column(Integer, primary_key=True)
+
+    book: Mapped["Book"] = relationship("Book", back_populates="excluded_lines")
 
 
 class SegmentBoundary(Base):

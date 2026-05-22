@@ -5,7 +5,14 @@ from typing import Sequence
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.models import Book, ExcludedPage, OcrPage, Segment, SegmentBoundary
+from api.models import (
+    Book,
+    ExcludedLine,
+    ExcludedPage,
+    OcrPage,
+    Segment,
+    SegmentBoundary,
+)
 
 
 @dataclass
@@ -21,13 +28,15 @@ async def save_boundaries(
     boundaries: list[BoundaryIn],
     excluded_page_indices: list[int],
     db: AsyncSession,
+    excluded_line_pairs: list[tuple[int, int]] | None = None,
 ) -> None:
     """
-    Idempotently save draft boundary markers and excluded pages.
+    Idempotently save draft boundary markers, excluded pages, and excluded lines.
     Replaces any previously saved draft for this book.
     """
     await db.execute(delete(SegmentBoundary).where(SegmentBoundary.book_id == book_id))
     await db.execute(delete(ExcludedPage).where(ExcludedPage.book_id == book_id))
+    await db.execute(delete(ExcludedLine).where(ExcludedLine.book_id == book_id))
 
     for b in boundaries:
         db.add(
@@ -43,6 +52,11 @@ async def save_boundaries(
     for pi in excluded_page_indices:
         db.add(ExcludedPage(book_id=book_id, page_index=pi))
 
+    for page_index, line_index in excluded_line_pairs or []:
+        db.add(
+            ExcludedLine(book_id=book_id, page_index=page_index, line_index=line_index)
+        )
+
     await db.commit()
 
 
@@ -57,6 +71,13 @@ async def confirm_segments(book_id: uuid.UUID, db: AsyncSession) -> int:
         select(ExcludedPage.page_index).where(ExcludedPage.book_id == book_id)
     )
     excluded = set(excl_result.scalars().all())
+
+    excl_lines_result = await db.execute(
+        select(ExcludedLine.page_index, ExcludedLine.line_index).where(
+            ExcludedLine.book_id == book_id
+        )
+    )
+    excluded_lines: set[tuple[int, int]] = set(excl_lines_result.all())
 
     pages_result = await db.execute(
         select(OcrPage).where(OcrPage.book_id == book_id).order_by(OcrPage.page_index)
@@ -111,16 +132,23 @@ async def confirm_segments(book_id: uuid.UUID, db: AsyncSession) -> int:
 
             page_lines = page.lines
 
+            def _filtered_join(lines: list[str], pi: int, start: int, end: int) -> str:
+                return "\n".join(
+                    lines[li]
+                    for li in range(start, end)
+                    if (pi, li) not in excluded_lines
+                )
+
             if pi == start_page and pi == end_page:
                 # Same page: slice between start_line and end_line
                 slice_end = end_line if end_line is not None else len(page_lines)
-                chunk = "\n".join(page_lines[start_line:slice_end])
+                chunk = _filtered_join(page_lines, pi, start_line, slice_end)
             elif pi == start_page:
-                chunk = "\n".join(page_lines[start_line:])
+                chunk = _filtered_join(page_lines, pi, start_line, len(page_lines))
             elif pi == end_page and end_line is not None:
-                chunk = "\n".join(page_lines[:end_line])
+                chunk = _filtered_join(page_lines, pi, 0, end_line)
             else:
-                chunk = page.markdown
+                chunk = _filtered_join(page_lines, pi, 0, len(page_lines))
 
             if chunk.strip():
                 text_parts.append(chunk)

@@ -46,9 +46,15 @@ export interface BoundaryItem {
   segment_title: string;
 }
 
+export interface ExcludedLineItem {
+  page_index: number;
+  line_index: number;
+}
+
 export interface BoundariesPayload {
   boundaries: BoundaryItem[];
   excluded_pages: number[];
+  excluded_lines: ExcludedLineItem[];
 }
 
 export interface ClusterLabel {

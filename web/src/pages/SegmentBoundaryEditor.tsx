@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { api, type BoundaryItem, type OcrPage } from "../api/client";
+import {
+  api,
+  type BoundaryItem,
+  type ExcludedLineItem,
+  type OcrPage,
+} from "../api/client";
 
 interface LocalBoundary extends BoundaryItem {
   _key: string; // page_index:line_index
@@ -16,6 +21,7 @@ export default function SegmentBoundaryEditor() {
 
   const [pages, setPages] = useState<OcrPage[]>([]);
   const [excludedPages, setExcludedPages] = useState<Set<number>>(new Set());
+  const [excludedLines, setExcludedLines] = useState<Set<string>>(new Set());
   const [boundaries, setBoundaries] = useState<LocalBoundary[]>([]);
   const [saving, setSaving] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -28,6 +34,13 @@ export default function SegmentBoundaryEditor() {
       .then(([pagesData, draft]) => {
         setPages(pagesData);
         setExcludedPages(new Set(draft.excluded_pages));
+        setExcludedLines(
+          new Set(
+            (draft.excluded_lines ?? []).map((l) =>
+              boundaryKey(l.page_index, l.line_index),
+            ),
+          ),
+        );
         setBoundaries(
           draft.boundaries.map((b) => ({
             ...b,
@@ -40,7 +53,11 @@ export default function SegmentBoundaryEditor() {
 
   // Auto-save draft 800ms after changes
   const scheduleSave = useCallback(
-    (newBoundaries: LocalBoundary[], newExcluded: Set<number>) => {
+    (
+      newBoundaries: LocalBoundary[],
+      newExcluded: Set<number>,
+      newExcludedLines: Set<string>,
+    ) => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
       saveTimer.current = setTimeout(async () => {
         setSaving(true);
@@ -48,6 +65,10 @@ export default function SegmentBoundaryEditor() {
           await api.boundaries.save(bookId!, {
             boundaries: newBoundaries.map(({ _key, ...b }) => b),
             excluded_pages: Array.from(newExcluded),
+            excluded_lines: Array.from(newExcludedLines).map((key) => {
+              const [pi, li] = key.split(":").map(Number);
+              return { page_index: pi, line_index: li } as ExcludedLineItem;
+            }),
           });
         } catch (e: any) {
           setError(e.message);
@@ -82,7 +103,7 @@ export default function SegmentBoundaryEditor() {
     // Re-index
     updated = updated.map((b, i) => ({ ...b, boundary_index: i }));
     setBoundaries(updated);
-    scheduleSave(updated, excludedPages);
+    scheduleSave(updated, excludedPages, excludedLines);
   };
 
   const toggleExclude = (pageIndex: number) => {
@@ -90,7 +111,16 @@ export default function SegmentBoundaryEditor() {
     if (next.has(pageIndex)) next.delete(pageIndex);
     else next.add(pageIndex);
     setExcludedPages(next);
-    scheduleSave(boundaries, next);
+    scheduleSave(boundaries, next, excludedLines);
+  };
+
+  const toggleExcludeLine = (pageIndex: number, lineIndex: number) => {
+    const key = boundaryKey(pageIndex, lineIndex);
+    const next = new Set(excludedLines);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    setExcludedLines(next);
+    scheduleSave(boundaries, excludedPages, next);
   };
 
   const updateTitle = (key: string, title: string) => {
@@ -98,7 +128,7 @@ export default function SegmentBoundaryEditor() {
       b._key === key ? { ...b, segment_title: title } : b,
     );
     setBoundaries(updated);
-    scheduleSave(updated, excludedPages);
+    scheduleSave(updated, excludedPages, excludedLines);
   };
 
   const handleConfirm = async () => {
@@ -107,6 +137,10 @@ export default function SegmentBoundaryEditor() {
       await api.boundaries.save(bookId!, {
         boundaries: boundaries.map(({ _key, ...b }) => b),
         excluded_pages: Array.from(excludedPages),
+        excluded_lines: Array.from(excludedLines).map((key) => {
+          const [pi, li] = key.split(":").map(Number);
+          return { page_index: pi, line_index: li } as ExcludedLineItem;
+        }),
       });
       await api.boundaries.confirm(bookId!);
       navigate(`/books/${bookId}`);
@@ -210,6 +244,7 @@ export default function SegmentBoundaryEditor() {
                 page.lines.map((line, lineIdx) => {
                   const key = boundaryKey(page.page_index, lineIdx);
                   const isBoundary = boundaries.some((b) => b._key === key);
+                  const isLineExcluded = excludedLines.has(key);
                   return (
                     <div key={lineIdx} style={{ position: "relative" }}>
                       {isBoundary && (
@@ -239,6 +274,12 @@ export default function SegmentBoundaryEditor() {
                       )}
                       <p
                         onClick={() => toggleLine(page.page_index, lineIdx)}
+                        onContextMenu={(e) => {
+                          if (e.ctrlKey) {
+                            e.preventDefault();
+                            toggleExcludeLine(page.page_index, lineIdx);
+                          }
+                        }}
                         className="boundary-line"
                         style={{
                           margin: "1px 0",
@@ -248,6 +289,11 @@ export default function SegmentBoundaryEditor() {
                           lineHeight: 1.5,
                           borderRadius: "3px",
                           background: isBoundary ? "#eef2ff" : undefined,
+                          textDecoration: isLineExcluded
+                            ? "line-through"
+                            : undefined,
+                          color: isLineExcluded ? "#ef4444" : undefined,
+                          opacity: isLineExcluded ? 0.6 : undefined,
                           minHeight: "1em",
                           whiteSpace: "pre-wrap",
                           userSelect: "none",
@@ -294,7 +340,8 @@ export default function SegmentBoundaryEditor() {
         </div>
 
         <p style={{ margin: 0, fontSize: "0.75rem", color: "#6b7280" }}>
-          Click any line on a page to start a new segment there.
+          Click any line to start a new segment. Ctrl + right-click to remove a
+          line.
         </p>
 
         <div

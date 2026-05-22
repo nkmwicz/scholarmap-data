@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.db import get_db
-from api.models import Book, ExcludedPage, OcrPage
+from api.models import Book, ExcludedLine, ExcludedPage, OcrPage
 from api.services.ocr import run_ocr
 
 router = APIRouter()
@@ -149,12 +149,25 @@ async def download_ocr_markdown(book_id: uuid.UUID, db: AsyncSession = Depends(g
     )
     excluded = set(excl_result.scalars().all())
 
+    excl_lines_result = await db.execute(
+        select(ExcludedLine.page_index, ExcludedLine.line_index).where(
+            ExcludedLine.book_id == book_id
+        )
+    )
+    excluded_lines_by_page: dict[int, set[int]] = {}
+    for row in excl_lines_result.all():
+        excluded_lines_by_page.setdefault(row[0], set()).add(row[1])
+
     pages_result = await db.execute(
         select(OcrPage).where(OcrPage.book_id == book_id).order_by(OcrPage.page_index)
     )
     pages = [p for p in pages_result.scalars().all() if p.page_index not in excluded]
 
-    parts = [f"## Page Index {p.page_index + 1}\n\n{p.markdown}" for p in pages]
+    parts = []
+    for p in pages:
+        excl_li = excluded_lines_by_page.get(p.page_index, set())
+        body = "\n".join(line for li, line in enumerate(p.lines) if li not in excl_li)
+        parts.append(f"## Page Index {p.page_index + 1}\n\n{body}")
     content = "\n\n".join(parts)
 
     filename = f"{book.slug}.md"

@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.db import get_db
-from api.models import Book, Segment, SegmentBoundary, ExcludedPage
+from api.models import Book, Segment, SegmentBoundary, ExcludedPage, ExcludedLine
 from api.services.boundary import BoundaryIn, save_boundaries, confirm_segments
 
 router = APIRouter()
@@ -22,14 +22,21 @@ class BoundaryItem(BaseModel):
     segment_title: str = ""
 
 
+class ExcludedLineItem(BaseModel):
+    page_index: int
+    line_index: int
+
+
 class BoundariesPayload(BaseModel):
     boundaries: list[BoundaryItem]
     excluded_pages: list[int] = []
+    excluded_lines: list[ExcludedLineItem] = []
 
 
 class BoundariesOut(BaseModel):
     boundaries: list[BoundaryItem]
     excluded_pages: list[int]
+    excluded_lines: list[ExcludedLineItem]
 
 
 class SegmentOut(BaseModel):
@@ -67,7 +74,16 @@ async def post_boundaries(
         )
         for b in payload.boundaries
     ]
-    await save_boundaries(book_id, boundaries_in, payload.excluded_pages, db)
+    excluded_line_pairs = [
+        (item.page_index, item.line_index) for item in payload.excluded_lines
+    ]
+    await save_boundaries(
+        book_id,
+        boundaries_in,
+        payload.excluded_pages,
+        db,
+        excluded_line_pairs=excluded_line_pairs,
+    )
 
 
 @router.get("/{book_id}/boundaries", response_model=BoundariesOut)
@@ -80,6 +96,11 @@ async def get_boundaries(book_id: uuid.UUID, db: AsyncSession = Depends(get_db))
     excl_result = await db.execute(
         select(ExcludedPage.page_index).where(ExcludedPage.book_id == book_id)
     )
+    excl_lines_result = await db.execute(
+        select(ExcludedLine.page_index, ExcludedLine.line_index).where(
+            ExcludedLine.book_id == book_id
+        )
+    )
     boundaries = [
         BoundaryItem(
             boundary_index=b.boundary_index,
@@ -90,7 +111,15 @@ async def get_boundaries(book_id: uuid.UUID, db: AsyncSession = Depends(get_db))
         for b in bounds_result.scalars().all()
     ]
     excluded = list(excl_result.scalars().all())
-    return BoundariesOut(boundaries=boundaries, excluded_pages=excluded)
+    excluded_lines = [
+        ExcludedLineItem(page_index=row[0], line_index=row[1])
+        for row in excl_lines_result.all()
+    ]
+    return BoundariesOut(
+        boundaries=boundaries,
+        excluded_pages=excluded,
+        excluded_lines=excluded_lines,
+    )
 
 
 # ── Segments ──────────────────────────────────────────────────────────────────
