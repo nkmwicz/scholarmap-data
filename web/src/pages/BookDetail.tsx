@@ -8,6 +8,7 @@ export default function BookDetail() {
   const [book, setBook] = useState<Book | null>(null);
   const [error, setError] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [boundaryCount, setBoundaryCount] = useState<number | null>(null);
   const [embedStats, setEmbedStats] = useState<{
     segment_count: number;
@@ -220,13 +221,31 @@ export default function BookDetail() {
                 : "No boundaries defined yet"}
             </p>
           )}
-          <button
-            className="btn btn-primary"
-            disabled={!canMark}
-            onClick={() => navigate(`/books/${bookId}/boundaries`)}
-          >
-            Open Boundary Editor
-          </button>
+          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+            <button
+              className="btn btn-primary"
+              disabled={!canMark}
+              onClick={() => navigate(`/books/${bookId}/boundaries`)}
+            >
+              Open Boundary Editor
+            </button>
+            <button
+              className="btn btn-secondary"
+              disabled={!ocrDone || downloading}
+              onClick={async () => {
+                setDownloading(true);
+                try {
+                  await api.books.downloadMarkdown(bookId!, book.slug);
+                } catch (e: any) {
+                  setError(e.message);
+                } finally {
+                  setDownloading(false);
+                }
+              }}
+            >
+              {downloading ? "Preparing…" : "Download OCR Markdown"}
+            </button>
+          </div>
         </div>
 
         {/* Step 3 */}

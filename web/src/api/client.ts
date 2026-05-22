@@ -181,6 +181,20 @@ export const api = {
       });
     },
     pages: (id: string) => request<OcrPage[]>(`/books/${id}/pages`),
+    downloadMarkdown: async (id: string, slug: string) => {
+      const res = await fetch(`${BASE}/books/${id}/ocr/markdown`);
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`${res.status} ${res.statusText}: ${text}`);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${slug}.md`;
+      a.click();
+      URL.revokeObjectURL(url);
+    },
   },
 
   boundaries: {

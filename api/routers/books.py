@@ -6,6 +6,7 @@ from fastapi import (
     File,
     Form,
     HTTPException,
+    Response,
     UploadFile,
 )
 from pydantic import BaseModel
@@ -13,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.db import get_db
-from api.models import Book
+from api.models import Book, ExcludedPage, OcrPage
 from api.services.ocr import run_ocr
 
 router = APIRouter()
@@ -123,16 +124,42 @@ async def upload_pdf(
 
 @router.get("/{book_id}/pages")
 async def get_pages(book_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
-    from api.models import OcrPage  # avoid circular at module level
-    from sqlalchemy import select as sa_select
-
     result = await db.execute(
-        sa_select(OcrPage)
-        .where(OcrPage.book_id == book_id)
-        .order_by(OcrPage.page_index)
+        select(OcrPage).where(OcrPage.book_id == book_id).order_by(OcrPage.page_index)
     )
     pages = result.scalars().all()
     return [
         {"page_index": p.page_index, "markdown": p.markdown, "lines": p.lines}
         for p in pages
     ]
+
+
+@router.get("/{book_id}/ocr/markdown")
+async def download_ocr_markdown(book_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    """Return a .md file of all non-excluded OCR pages, one ## Page Index heading per page."""
+    book_result = await db.execute(select(Book).where(Book.id == book_id))
+    book = book_result.scalar_one_or_none()
+    if not book:
+        raise HTTPException(404, "Book not found")
+    if book.status in ("pending", "ocr_processing"):
+        raise HTTPException(400, "OCR has not completed yet")
+
+    excl_result = await db.execute(
+        select(ExcludedPage.page_index).where(ExcludedPage.book_id == book_id)
+    )
+    excluded = set(excl_result.scalars().all())
+
+    pages_result = await db.execute(
+        select(OcrPage).where(OcrPage.book_id == book_id).order_by(OcrPage.page_index)
+    )
+    pages = [p for p in pages_result.scalars().all() if p.page_index not in excluded]
+
+    parts = [f"## Page Index {p.page_index + 1}\n\n{p.markdown}" for p in pages]
+    content = "\n\n".join(parts)
+
+    filename = f"{book.slug}.md"
+    return Response(
+        content=content,
+        media_type="text/markdown",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
