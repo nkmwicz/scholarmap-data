@@ -85,6 +85,19 @@ The database schema is applied automatically on first start. The first build wil
 docker compose watch
 ```
 
+or 
+
+```bash
+docker compose up --watch
+```
+
+This starts the API and web services with hot reload enabled.
+
+```bash
+docker compose up --build --watch
+``` 
+This rebuilds the API image and starts both services with hot reload enabled.
+
 File changes under `api/` (including `api/clustering/`, `api/genai/`, `api/ocr/`, `api/utils/`, `api/embeds/`) and `web/src/` are synced into the running containers without a full rebuild.
 
 ### Stop
