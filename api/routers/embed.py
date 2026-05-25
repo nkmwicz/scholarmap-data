@@ -20,9 +20,17 @@ async def trigger_embed(
     book = result.scalar_one_or_none()
     if not book:
         raise HTTPException(404, "Book not found")
-    if book.status not in ("segments_complete", "embedded", "embedding"):
+    if book.status not in (
+        "segments_complete",
+        "embedded",
+        "embedding",
+        "clustering",
+        "clustered",
+        "labeling",
+        "labeled",
+    ):
         raise HTTPException(
-            400, f"Book must be in segments_complete status, currently: {book.status}"
+            400, f"Book must have segments before embedding, currently: {book.status}"
         )
 
     background_tasks.add_task(embed_book, book_id, db)

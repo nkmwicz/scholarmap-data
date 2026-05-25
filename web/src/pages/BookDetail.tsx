@@ -10,6 +10,7 @@ export default function BookDetail() {
   const [uploading, setUploading] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [ocrMessage, setOcrMessage] = useState<string | null>(null);
+  const [showReembedConfirm, setShowReembedConfirm] = useState(false);
   const [boundaryCount, setBoundaryCount] = useState<number | null>(null);
   const [embedStats, setEmbedStats] = useState<{
     segment_count: number;
@@ -108,6 +109,7 @@ export default function BookDetail() {
   };
 
   const handleEmbed = async () => {
+    setShowReembedConfirm(false);
     try {
       await api.embed.trigger(bookId!);
       setBook((prev) => (prev ? { ...prev, status: "embedding" } : prev));
@@ -134,9 +136,15 @@ export default function BookDetail() {
     "boundaries_pending",
     "segments_complete",
   ].includes(book.status);
-  const canEmbed = ["segments_complete", "embedded", "embedding"].includes(
-    book.status,
-  );
+  const canEmbed = [
+    "segments_complete",
+    "embedded",
+    "embedding",
+    "clustering",
+    "clustered",
+    "labeling",
+    "labeled",
+  ].includes(book.status);
   const canCluster = [
     "embedded",
     "clustered",
@@ -306,12 +314,73 @@ export default function BookDetail() {
                   } ready to embed`}
             </p>
           )}
+          {showReembedConfirm && (
+            <div
+              style={{
+                margin: "0 0 0.75rem",
+                padding: "0.875rem 1rem",
+                background: "#fffbeb",
+                border: "1px solid #fcd34d",
+                borderRadius: 8,
+                fontSize: "0.85rem",
+                color: "#92400e",
+              }}
+            >
+              <p style={{ margin: "0 0 0.5rem", fontWeight: 600 }}>
+                ⚠️ Re-run embedding?
+              </p>
+              <p style={{ margin: "0 0 0.75rem", lineHeight: 1.5 }}>
+                This will delete all{" "}
+                {embedStats ? (
+                  <strong>{embedStats.chunk_count} existing chunks</strong>
+                ) : (
+                  "existing chunks"
+                )}{" "}
+                and re-chunk + re-embed from your saved segments. Any existing
+                clusters will need to be re-run afterward.
+              </p>
+              <div style={{ display: "flex", gap: "0.5rem" }}>
+                <button className="btn btn-primary" onClick={handleEmbed}>
+                  Yes, re-run
+                </button>
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => setShowReembedConfirm(false)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
           <button
             className="btn btn-primary"
             disabled={!canEmbed || book.status === "embedding"}
-            onClick={handleEmbed}
+            onClick={() => {
+              const alreadyEmbedded = [
+                "embedded",
+                "clustering",
+                "clustered",
+                "labeling",
+                "labeled",
+              ].includes(book.status);
+              if (alreadyEmbedded) {
+                setShowReembedConfirm(true);
+              } else {
+                handleEmbed();
+              }
+            }}
           >
-            {book.status === "embedding" ? "Embedding…" : "Run Embedding"}
+            {book.status === "embedding"
+              ? "Embedding…"
+              : [
+                    "embedded",
+                    "clustering",
+                    "clustered",
+                    "labeling",
+                    "labeled",
+                  ].includes(book.status)
+                ? "Re-run Embedding"
+                : "Run Embedding"}
           </button>
         </div>
 

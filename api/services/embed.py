@@ -8,10 +8,10 @@ from api.models import Book, Segment, SegmentChunk
 # Chunk size per document type (words)
 CHUNK_SIZES = {
     "letters": 500,
-    "chapters": 2000,
-    "other": 2000,
+    "chapters": 500,
+    "other": 500,
 }
-CHUNK_OVERLAP = 200
+CHUNK_OVERLAP = 50
 
 
 def _word_len(s: str) -> int:
