@@ -40,6 +40,7 @@ export default function ClusterView() {
     "text",
   );
   const [pageIdx, setPageIdx] = useState(0);
+  const [chunkPageIdx, setChunkPageIdx] = useState(0);
   const [clusterBarOpen, setClusterBarOpen] = useState(true);
   // Gallica calibration
   const [gallicaBannerOpen, setGallicaBannerOpen] = useState(true);
@@ -53,6 +54,7 @@ export default function ClusterView() {
 
   useEffect(() => {
     setViewMode("text");
+    setChunkPageIdx(0);
   }, [selectedChunk?.chunk_id]);
 
   useEffect(() => {
@@ -807,7 +809,7 @@ export default function ClusterView() {
                             : " · pp. ?"}
                         </span>
                       </div>
-                      {/* Text | Summary ribbon */}
+                      {/* Text | Images | Summary ribbon */}
                       <div
                         style={{
                           display: "flex",
@@ -817,7 +819,11 @@ export default function ClusterView() {
                           flexShrink: 0,
                         }}
                       >
-                        {(["text", "summary"] as const).map((mode) => (
+                        {(book?.gallica_url &&
+                        selectedChunk.page_range.length > 0
+                          ? (["text", "images", "summary"] as const)
+                          : (["text", "summary"] as const)
+                        ).map((mode) => (
                           <button
                             key={mode}
                             onClick={() => setViewMode(mode)}
@@ -832,10 +838,142 @@ export default function ClusterView() {
                               color: viewMode === mode ? "#fff" : "#374151",
                             }}
                           >
-                            {mode === "text" ? "Text" : "Summary"}
+                            {mode === "text"
+                              ? "OCR Text"
+                              : mode === "images"
+                                ? "Images"
+                                : "Summary"}
                           </button>
                         ))}
                       </div>
+                    </div>
+                    {/* Chunk images */}
+                    <div
+                      style={{
+                        flex: 1,
+                        minHeight: 0,
+                        display:
+                          viewMode === "images" && book?.gallica_url
+                            ? "flex"
+                            : "none",
+                        flexDirection: "column",
+                      }}
+                    >
+                      {selectedChunk.page_range.length > 0 && (
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.5rem",
+                            padding: "0.25rem 0.6rem",
+                            borderBottom: "1px solid #e5e7eb",
+                            flexShrink: 0,
+                          }}
+                        >
+                          <button
+                            onClick={() =>
+                              setChunkPageIdx((i) => Math.max(0, i - 1))
+                            }
+                            disabled={chunkPageIdx === 0}
+                            style={{
+                              padding: "0.15rem 0.5rem",
+                              fontSize: "0.8rem",
+                              border: "1px solid #e5e7eb",
+                              borderRadius: 4,
+                              background:
+                                chunkPageIdx === 0 ? "#f9fafb" : "#fff",
+                              color: chunkPageIdx === 0 ? "#d1d5db" : "#374151",
+                              cursor:
+                                chunkPageIdx === 0 ? "default" : "pointer",
+                            }}
+                          >
+                            ◀
+                          </button>
+                          <span
+                            style={{
+                              fontSize: "0.72rem",
+                              color: "#6b7280",
+                              flex: 1,
+                              textAlign: "center",
+                            }}
+                          >
+                            Folio{" "}
+                            {selectedChunk.page_range[chunkPageIdx] +
+                              (book?.gallica_offset ?? 0)}{" "}
+                            <span style={{ color: "#9ca3af" }}>
+                              ({chunkPageIdx + 1} /{" "}
+                              {selectedChunk.page_range.length})
+                            </span>
+                          </span>
+                          <button
+                            onClick={() =>
+                              setChunkPageIdx((i) =>
+                                Math.min(
+                                  selectedChunk.page_range.length - 1,
+                                  i + 1,
+                                ),
+                              )
+                            }
+                            disabled={
+                              chunkPageIdx ===
+                              selectedChunk.page_range.length - 1
+                            }
+                            style={{
+                              padding: "0.15rem 0.5rem",
+                              fontSize: "0.8rem",
+                              border: "1px solid #e5e7eb",
+                              borderRadius: 4,
+                              background:
+                                chunkPageIdx ===
+                                selectedChunk.page_range.length - 1
+                                  ? "#f9fafb"
+                                  : "#fff",
+                              color:
+                                chunkPageIdx ===
+                                selectedChunk.page_range.length - 1
+                                  ? "#d1d5db"
+                                  : "#374151",
+                              cursor:
+                                chunkPageIdx ===
+                                selectedChunk.page_range.length - 1
+                                  ? "default"
+                                  : "pointer",
+                            }}
+                          >
+                            ▶
+                          </button>
+                        </div>
+                      )}
+                      <PanZoom
+                        key={`${selectedChunk.chunk_id}-${chunkPageIdx}`}
+                      >
+                        {selectedChunk.page_range.map((page, i) => {
+                          const url = gallicaPageUrl(page);
+                          return (
+                            <div
+                              key={page}
+                              style={{
+                                display: i === chunkPageIdx ? "block" : "none",
+                              }}
+                            >
+                              {url && (
+                                <img
+                                  src={url}
+                                  alt={`Folio ${
+                                    page + (book?.gallica_offset ?? 0)
+                                  }`}
+                                  style={{
+                                    width: "100%",
+                                    display: "block",
+                                    pointerEvents: "none",
+                                  }}
+                                  draggable={false}
+                                />
+                              )}
+                            </div>
+                          );
+                        })}
+                      </PanZoom>
                     </div>
                     {/* Chunk text */}
                     {viewMode === "text" && (
