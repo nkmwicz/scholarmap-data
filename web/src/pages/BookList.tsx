@@ -6,9 +6,15 @@ import {
   type DocumentType,
   type SearchResult,
   type Segment,
+  type SegmentChunkWithLabels,
 } from "../api/client";
 import StatusBadge from "../components/StatusBadge";
-import { clusterColor, primaryClusterIndex } from "../components/ChunkMap";
+import {
+  ChunkMap,
+  ChunkedSegmentText,
+  clusterColor,
+  primaryClusterIndex,
+} from "../components/ChunkMap";
 import { PanZoom } from "../components/PanZoom";
 import { SegmentSummaryPanel } from "../components/SegmentSummaryPanel";
 import { Neo4jToggleButton } from "../components/Neo4jToggleButton";
@@ -31,6 +37,7 @@ export default function BookList() {
     result: SearchResult;
     segment: Segment | null;
     book: Book | null;
+    segmentChunks: SegmentChunkWithLabels[];
     loading: boolean;
     pageIdx: number;
     viewMode: "text" | "images" | "summary";
@@ -106,6 +113,7 @@ export default function BookList() {
       result: r,
       segment: null,
       book: null,
+      segmentChunks: [],
       loading: true,
       pageIdx: 0,
       viewMode: "text",
@@ -113,9 +121,19 @@ export default function BookList() {
     Promise.all([
       api.segments.get(r.book_id, r.segment_id),
       api.books.get(r.book_id),
+      api.segments.chunks(r.book_id, r.segment_id).catch(() => []),
     ])
-      .then(([seg, book]) => {
-        setViewer((v) => v && { ...v, segment: seg, book, loading: false });
+      .then(([seg, book, chunks]) => {
+        setViewer(
+          (v) =>
+            v && {
+              ...v,
+              segment: seg,
+              book,
+              segmentChunks: chunks,
+              loading: false,
+            },
+        );
       })
       .catch(() => {
         setViewer((v) => v && { ...v, loading: false });
@@ -804,16 +822,49 @@ export default function BookList() {
                   <div
                     style={{
                       flex: 1,
-                      overflowY: "auto",
-                      padding: "1rem 1.25rem",
-                      fontFamily: "Georgia, serif",
-                      fontSize: "0.9rem",
-                      lineHeight: 1.8,
-                      color: "#1f2937",
-                      whiteSpace: "pre-wrap",
+                      minHeight: 0,
+                      display: "flex",
+                      flexDirection: "column",
+                      overflow: "hidden",
                     }}
                   >
-                    {viewer.segment.markdown}
+                    {viewer.segmentChunks.length > 0 && (
+                      <div
+                        style={{
+                          padding: "0.5rem 1rem 0.25rem",
+                          borderBottom: "1px solid #e5e7eb",
+                          flexShrink: 0,
+                        }}
+                      >
+                        <ChunkMap
+                          chunks={viewer.segmentChunks}
+                          clusters={[]}
+                          highlightChunkId={viewer.result.chunk_id}
+                        />
+                      </div>
+                    )}
+                    {viewer.segmentChunks.length > 0 ? (
+                      <ChunkedSegmentText
+                        chunks={viewer.segmentChunks}
+                        clusters={[]}
+                        highlightChunkId={viewer.result.chunk_id}
+                      />
+                    ) : (
+                      <div
+                        style={{
+                          flex: 1,
+                          overflowY: "auto",
+                          padding: "1rem 1.25rem",
+                          fontFamily: "Georgia, serif",
+                          fontSize: "0.9rem",
+                          lineHeight: 1.8,
+                          color: "#1f2937",
+                          whiteSpace: "pre-wrap",
+                        }}
+                      >
+                        {viewer.segment.markdown}
+                      </div>
+                    )}
                   </div>
                 )}
                 {viewer.viewMode === "summary" && (

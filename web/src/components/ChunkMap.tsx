@@ -51,6 +51,7 @@ interface ChunkedTextProps {
   clusters: Cluster[];
   activeParentIndex?: number;
   activeSubIndex?: number | null;
+  highlightChunkId?: string;
 }
 
 export function ChunkedSegmentText({
@@ -58,6 +59,7 @@ export function ChunkedSegmentText({
   clusters,
   activeParentIndex,
   activeSubIndex,
+  highlightChunkId,
 }: ChunkedTextProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
@@ -79,11 +81,19 @@ export function ChunkedSegmentText({
     >
       {chunks.map((chunk) => {
         const primary = primaryClusterIndex(chunk.cluster_labels);
-        const color =
+        const clusterCol =
           primary !== null
             ? clusterColor(primary)
             : { bg: "#f9fafb", border: "#e5e7eb", text: "#6b7280" };
+        const neutral = { bg: "#f9fafb", border: "#e5e7eb", text: "#6b7280" };
         const isHovered = hoveredId === chunk.chunk_id;
+        const isHighlighted = highlightChunkId === chunk.chunk_id;
+        // When a specific chunk is highlighted (search mode), non-matching chunks
+        // stay neutral — only the matched chunk gets cluster color.
+        const color =
+          highlightChunkId !== undefined && !isHighlighted
+            ? neutral
+            : clusterCol;
         const active = isChunkActive(
           chunk.cluster_labels,
           activeParentIndex,
@@ -118,41 +128,47 @@ export function ChunkedSegmentText({
             onMouseLeave={() => setHoveredId(null)}
             style={{
               position: "relative",
-              borderLeft: `3px solid ${active ? color.border : "#e5e7eb"}`,
-              background: active
-                ? isHovered
-                  ? color.bg
-                  : `${color.bg}66`
-                : isHovered
-                  ? "#f3f4f6"
-                  : "transparent",
+              borderLeft: `3px solid ${isHighlighted ? color.border : active ? color.border : "#e5e7eb"}`,
+              background: isHighlighted
+                ? color.bg
+                : active
+                  ? isHovered
+                    ? color.bg
+                    : `${color.bg}66`
+                  : isHovered
+                    ? "#f3f4f6"
+                    : "transparent",
               borderRadius: "0 4px 4px 0",
               padding: "0.45rem 0.75rem 0.45rem 0.65rem",
               marginBottom: "0.5rem",
+              boxShadow: isHighlighted
+                ? `inset 3px 0 0 ${color.border}, 0 0 0 1px ${color.border}44`
+                : undefined,
               transition: "background 0.15s",
             }}
           >
-            {/* Cluster badge — top right */}
-            {chunk.cluster_labels.length > 0 && (
-              <span
-                style={{
-                  float: "right",
-                  marginLeft: "0.6rem",
-                  marginBottom: "0.15rem",
-                  fontSize: "0.62rem",
-                  fontWeight: 700,
-                  fontFamily: "monospace",
-                  background: color.bg,
-                  color: color.text,
-                  border: `1px solid ${color.border}`,
-                  padding: "0.05rem 0.35rem",
-                  borderRadius: 4,
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {labelStr}
-              </span>
-            )}
+            {/* Cluster badge — top right (hidden for non-matched chunks in search mode) */}
+            {chunk.cluster_labels.length > 0 &&
+              !(highlightChunkId !== undefined && !isHighlighted) && (
+                <span
+                  style={{
+                    float: "right",
+                    marginLeft: "0.6rem",
+                    marginBottom: "0.15rem",
+                    fontSize: "0.62rem",
+                    fontWeight: 700,
+                    fontFamily: "monospace",
+                    background: color.bg,
+                    color: color.text,
+                    border: `1px solid ${color.border}`,
+                    padding: "0.05rem 0.35rem",
+                    borderRadius: 4,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {labelStr}
+                </span>
+              )}
             <p
               style={{
                 margin: 0,
