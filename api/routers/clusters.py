@@ -263,6 +263,106 @@ async def get_cluster_chunks(
     ]
 
 
+class SegmentChunkWithLabels(BaseModel):
+    chunk_id: uuid.UUID
+    chunk_index: int
+    text: str
+    page_range: list[int]
+    cluster_labels: list[ClusterLabel]
+
+
+@router.get(
+    "/{book_id}/segments/{segment_id}/chunks",
+    response_model=list[SegmentChunkWithLabels],
+)
+async def get_segment_chunks_with_labels(
+    book_id: uuid.UUID,
+    segment_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    seg_result = await db.execute(
+        select(Segment).where(Segment.id == segment_id, Segment.book_id == book_id)
+    )
+    if seg_result.scalar_one_or_none() is None:
+        raise HTTPException(404, "Segment not found")
+
+    # Build cluster index for this book
+    all_cl_result = await db.execute(
+        select(Cluster)
+        .where(Cluster.book_id == book_id)
+        .order_by(Cluster.cluster_index)
+    )
+    all_clusters = list(all_cl_result.scalars().all())
+    cluster_map: dict[uuid.UUID, Cluster] = {c.id: c for c in all_clusters}
+    sub_positions: dict[uuid.UUID, dict[uuid.UUID, int]] = {}
+    for c in all_clusters:
+        if c.is_subcluster and c.parent_cluster_id:
+            parent_subs = sub_positions.setdefault(c.parent_cluster_id, {})
+            parent_subs[c.id] = len(parent_subs)
+
+    chunks_result = await db.execute(
+        select(SegmentChunk)
+        .where(SegmentChunk.segment_id == segment_id)
+        .order_by(SegmentChunk.chunk_index)
+    )
+    chunks = list(chunks_result.scalars().all())
+    if not chunks:
+        return []
+
+    chunk_ids = [c.id for c in chunks]
+    mem_result = await db.execute(
+        select(ClusterMembership.chunk_id, ClusterMembership.cluster_id).where(
+            ClusterMembership.chunk_id.in_(chunk_ids)
+        )
+    )
+    chunk_to_clusters: dict[uuid.UUID, list[uuid.UUID]] = {}
+    for cid, cluster_id in mem_result.all():
+        chunk_to_clusters.setdefault(cid, []).append(cluster_id)
+
+    out: list[SegmentChunkWithLabels] = []
+    for chunk in chunks:
+        sub_labels: list[ClusterLabel] = []
+        seen_parent_ids: set[uuid.UUID] = set()
+        top_labels: list[tuple[uuid.UUID, int]] = []
+        for cluster_id in chunk_to_clusters.get(chunk.id, []):
+            c = cluster_map.get(cluster_id)
+            if c is None:
+                continue
+            if c.is_subcluster and c.parent_cluster_id:
+                parent = cluster_map.get(c.parent_cluster_id)
+                if parent:
+                    sub_pos = sub_positions.get(c.parent_cluster_id, {}).get(c.id, 0)
+                    sub_labels.append(
+                        ClusterLabel(
+                            parent_index=parent.cluster_index, sub_index=sub_pos
+                        )
+                    )
+                    seen_parent_ids.add(c.parent_cluster_id)
+            else:
+                top_labels.append((c.id, c.cluster_index))
+        labels = sub_labels + [
+            ClusterLabel(parent_index=ci, sub_index=None)
+            for cid, ci in top_labels
+            if cid not in seen_parent_ids
+        ]
+        labels.sort(
+            key=lambda l: (
+                l.parent_index,
+                l.sub_index if l.sub_index is not None else -1,
+            )
+        )
+        out.append(
+            SegmentChunkWithLabels(
+                chunk_id=chunk.id,
+                chunk_index=chunk.chunk_index,
+                text=chunk.text,
+                page_range=chunk.page_range or [],
+                cluster_labels=labels,
+            )
+        )
+    return out
+
+
 @router.get("/{book_id}/clusters", response_model=list[ClusterOut])
 async def get_clusters(book_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     clusters_result = await db.execute(

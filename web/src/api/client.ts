@@ -139,6 +139,14 @@ export interface Segment {
   neo4j_entered: boolean;
 }
 
+export interface SegmentChunkWithLabels {
+  chunk_id: string;
+  chunk_index: number;
+  text: string;
+  page_range: number[];
+  cluster_labels: ClusterLabel[];
+}
+
 export interface RepresentativeSample {
   chunk_id: string;
   text: string;
@@ -250,6 +258,10 @@ export const api = {
         method: "PATCH",
         body: JSON.stringify(data),
       }),
+    chunks: (bookId: string, segmentId: string) =>
+      request<SegmentChunkWithLabels[]>(
+        `/books/${bookId}/segments/${segmentId}/chunks`,
+      ),
   },
 
   embed: {

@@ -8,6 +8,7 @@ import {
   type Segment,
 } from "../api/client";
 import StatusBadge from "../components/StatusBadge";
+import { clusterColor, primaryClusterIndex } from "../components/ChunkMap";
 import { PanZoom } from "../components/PanZoom";
 import { SegmentSummaryPanel } from "../components/SegmentSummaryPanel";
 import { Neo4jToggleButton } from "../components/Neo4jToggleButton";
@@ -200,7 +201,12 @@ export default function BookList() {
                     className="card"
                     style={{
                       padding: "0.75rem 1rem",
-                      borderLeft: "3px solid #a78bfa",
+                      borderLeft: `3px solid ${
+                        primaryClusterIndex(r.cluster_labels) !== null
+                          ? clusterColor(primaryClusterIndex(r.cluster_labels)!)
+                              .border
+                          : "#a78bfa"
+                      }`,
                     }}
                   >
                     {/* Header row */}
@@ -283,25 +289,26 @@ export default function BookList() {
                           marginBottom: "0.4rem",
                         }}
                       >
-                        {r.cluster_labels.map((lbl, i) => (
-                          <span
-                            key={i}
-                            style={{
-                              fontSize: "0.65rem",
-                              padding: "0.1rem 0.45rem",
-                              borderRadius: 9999,
-                              background:
-                                lbl.sub_index !== null ? "#ede9fe" : "#f3f4f6",
-                              color:
-                                lbl.sub_index !== null ? "#5b21b6" : "#374151",
-                              border: `1px solid ${lbl.sub_index !== null ? "#c4b5fd" : "#e5e7eb"}`,
-                            }}
-                          >
-                            {lbl.sub_index !== null
-                              ? `${lbl.parent_index + 1}(${lbl.sub_index + 1})`
-                              : `${lbl.parent_index + 1}`}
-                          </span>
-                        ))}
+                        {r.cluster_labels.map((lbl, i) => {
+                          const color = clusterColor(lbl.parent_index);
+                          return (
+                            <span
+                              key={i}
+                              style={{
+                                fontSize: "0.65rem",
+                                padding: "0.1rem 0.45rem",
+                                borderRadius: 9999,
+                                background: color.bg,
+                                color: color.text,
+                                border: `1px solid ${color.border}`,
+                              }}
+                            >
+                              {lbl.sub_index !== null
+                                ? `${lbl.parent_index + 1}(${lbl.sub_index + 1})`
+                                : `${lbl.parent_index + 1}`}
+                            </span>
+                          );
+                        })}
                       </div>
                     )}
                     {/* Chunk text */}

@@ -7,10 +7,12 @@ import {
   type ClusterChunk,
   type ChapterSummary,
   type Segment,
+  type SegmentChunkWithLabels,
 } from "../api/client";
 import { PanZoom } from "../components/PanZoom";
 import { SegmentSummaryPanel } from "../components/SegmentSummaryPanel";
 import { Neo4jToggleButton } from "../components/Neo4jToggleButton";
+import { ChunkMap, ChunkedSegmentText } from "../components/ChunkMap";
 
 const col: React.CSSProperties = {
   display: "flex",
@@ -33,6 +35,9 @@ export default function ClusterView() {
   const [selectedSegment, setSelectedSegment] = useState<Segment | null>(null);
   const [chunks, setChunks] = useState<ClusterChunk[]>([]);
   const [selectedChunk, setSelectedChunk] = useState<ClusterChunk | null>(null);
+  const [segmentChunks, setSegmentChunks] = useState<SegmentChunkWithLabels[]>(
+    [],
+  );
   const [generatingSummary, setGeneratingSummary] = useState(false);
   const [loadingSegs, setLoadingSegs] = useState(false);
 
@@ -61,6 +66,19 @@ export default function ClusterView() {
   useEffect(() => {
     setPageIdx(0);
   }, [selectedSegment?.id]);
+
+  // Load segment chunks (for ChunkMap) when a segment or chunk changes
+  useEffect(() => {
+    const segId = selectedSegment?.id ?? selectedChunk?.segment_id;
+    if (!bookId || !segId) {
+      setSegmentChunks([]);
+      return;
+    }
+    api.segments
+      .chunks(bookId, segId)
+      .then(setSegmentChunks)
+      .catch(() => {});
+  }, [bookId, selectedSegment?.id, selectedChunk?.segment_id]);
 
   useEffect(() => {
     api.books
@@ -121,6 +139,13 @@ export default function ClusterView() {
   }, {});
 
   const topClusters = clusters.filter((c) => !c.is_subcluster);
+
+  // Active cluster filter for chunk highlighting
+  const activeParentIndex = selectedCluster?.cluster_index;
+  const activeSubIndex = selectedSub
+    ? (subMap[selectedCluster!.id]?.findIndex((s) => s.id === selectedSub.id) ??
+      undefined)
+    : undefined;
 
   const fetchSegments = (clusterId: string) => {
     setLoadingSegs(true);
@@ -913,6 +938,20 @@ export default function ClusterView() {
                         ))}
                       </div>
                     </div>
+                    {/* Segment chunk map */}
+                    <ChunkMap
+                      chunks={segmentChunks}
+                      clusters={clusters}
+                      highlightChunkId={selectedChunk.chunk_id}
+                      activeParentIndex={activeParentIndex}
+                      activeSubIndex={activeSubIndex}
+                      onChunkClick={(c: SegmentChunkWithLabels) => {
+                        const match = chunks.find(
+                          (ch) => ch.chunk_id === c.chunk_id,
+                        );
+                        if (match) setSelectedChunk(match);
+                      }}
+                    />
                     {/* Chunk images */}
                     <div
                       style={{
@@ -1042,23 +1081,31 @@ export default function ClusterView() {
                       </PanZoom>
                     </div>
                     {/* Chunk text */}
-                    {viewMode === "text" && (
-                      <div
-                        style={{
-                          overflowY: "auto",
-                          flex: 1,
-                          minHeight: 0,
-                          padding: "1rem 1.25rem",
-                          fontFamily: "Georgia, serif",
-                          fontSize: "0.9rem",
-                          lineHeight: 1.8,
-                          color: "#1f2937",
-                          whiteSpace: "pre-wrap",
-                        }}
-                      >
-                        {selectedChunk.text}
-                      </div>
-                    )}
+                    {viewMode === "text" &&
+                      (segmentChunks.length > 0 ? (
+                        <ChunkedSegmentText
+                          chunks={segmentChunks}
+                          clusters={clusters}
+                          activeParentIndex={activeParentIndex}
+                          activeSubIndex={activeSubIndex}
+                        />
+                      ) : (
+                        <div
+                          style={{
+                            overflowY: "auto",
+                            flex: 1,
+                            minHeight: 0,
+                            padding: "1rem 1.25rem",
+                            fontFamily: "Georgia, serif",
+                            fontSize: "0.9rem",
+                            lineHeight: 1.8,
+                            color: "#1f2937",
+                            whiteSpace: "pre-wrap",
+                          }}
+                        >
+                          {selectedChunk.text}
+                        </div>
+                      ))}
                     {/* Chunk summary */}
                     {viewMode === "summary" && (
                       <div
@@ -1320,6 +1367,13 @@ export default function ClusterView() {
                       )}
                     </div>
                   </div>
+                  {/* Segment chunk map */}
+                  <ChunkMap
+                    chunks={segmentChunks}
+                    clusters={clusters}
+                    activeParentIndex={activeParentIndex}
+                    activeSubIndex={activeSubIndex}
+                  />
                   <div
                     style={{
                       flex: 1,
@@ -1437,21 +1491,30 @@ export default function ClusterView() {
                       })}
                     </PanZoom>
                   </div>
-                  <div
-                    style={{
-                      overflowY: "auto",
-                      flex: 1,
-                      padding: "1rem 1.25rem",
-                      display: viewMode === "text" ? "block" : "none",
-                      fontFamily: "Georgia, serif",
-                      fontSize: "0.9rem",
-                      lineHeight: 1.8,
-                      color: "#1f2937",
-                      whiteSpace: "pre-wrap",
-                    }}
-                  >
-                    {selectedSegment.markdown}
-                  </div>
+                  {viewMode === "text" &&
+                    (segmentChunks.length > 0 ? (
+                      <ChunkedSegmentText
+                        chunks={segmentChunks}
+                        clusters={clusters}
+                        activeParentIndex={activeParentIndex}
+                        activeSubIndex={activeSubIndex}
+                      />
+                    ) : (
+                      <div
+                        style={{
+                          overflowY: "auto",
+                          flex: 1,
+                          padding: "1rem 1.25rem",
+                          fontFamily: "Georgia, serif",
+                          fontSize: "0.9rem",
+                          lineHeight: 1.8,
+                          color: "#1f2937",
+                          whiteSpace: "pre-wrap",
+                        }}
+                      >
+                        {selectedSegment.markdown}
+                      </div>
+                    ))}
                   {viewMode === "summary" && bookId && (
                     <SegmentSummaryPanel
                       segment={selectedSegment}
