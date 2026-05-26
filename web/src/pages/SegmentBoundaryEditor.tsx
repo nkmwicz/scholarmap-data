@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   api,
@@ -28,6 +28,17 @@ export default function SegmentBoundaryEditor() {
   const [error, setError] = useState("");
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Drag-select for line exclusion (Ctrl+right-click drag)
+  const dragRef = useRef<{
+    adding: boolean;
+    startKey: string;
+    currentKeys: Set<string>;
+  } | null>(null);
+  const [dragKeys, setDragKeys] = useState<Set<string>>(new Set());
+  // Ref mirrors for stale-closure-free global event handler
+  const stateRef = useRef({ excludedLines, boundaries, excludedPages });
+  const allLineKeysRef = useRef<string[]>([]);
+
   // Load pages and any saved draft
   useEffect(() => {
     Promise.all([api.books.pages(bookId!), api.boundaries.get(bookId!)])
@@ -50,6 +61,28 @@ export default function SegmentBoundaryEditor() {
       })
       .catch((e) => setError(e.message));
   }, [bookId]);
+
+  // Keep stateRef in sync
+  useEffect(() => {
+    stateRef.current = { excludedLines, boundaries, excludedPages };
+  }, [excludedLines, boundaries, excludedPages]);
+
+  // Flat ordered list of all visible line keys, for drag-range lookup
+  const allLineKeys = useMemo(() => {
+    const keys: string[] = [];
+    for (const page of pages) {
+      if (!excludedPages.has(page.page_index)) {
+        for (let li = 0; li < page.lines.length; li++) {
+          keys.push(boundaryKey(page.page_index, li));
+        }
+      }
+    }
+    return keys;
+  }, [pages, excludedPages]);
+
+  useEffect(() => {
+    allLineKeysRef.current = allLineKeys;
+  }, [allLineKeys]);
 
   // Auto-save draft 800ms after changes
   const scheduleSave = useCallback(
@@ -79,6 +112,31 @@ export default function SegmentBoundaryEditor() {
     },
     [bookId],
   );
+
+  // Global mouseup: apply the accumulated drag range
+  useEffect(() => {
+    const handleMouseUp = (e: MouseEvent) => {
+      if (e.button !== 2 || !dragRef.current) return;
+      const { adding, currentKeys } = dragRef.current;
+      dragRef.current = null;
+      setDragKeys(new Set());
+      if (currentKeys.size === 0) return;
+      const {
+        excludedLines: cur,
+        boundaries: curB,
+        excludedPages: curP,
+      } = stateRef.current;
+      const next = new Set(cur);
+      currentKeys.forEach((key) => {
+        if (adding) next.add(key);
+        else next.delete(key);
+      });
+      setExcludedLines(next);
+      scheduleSave(curB, curP, next);
+    };
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => window.removeEventListener("mouseup", handleMouseUp);
+  }, [scheduleSave]);
 
   const toggleLine = (pageIndex: number, lineIndex: number) => {
     const key = boundaryKey(pageIndex, lineIndex);
@@ -274,11 +332,37 @@ export default function SegmentBoundaryEditor() {
                       )}
                       <p
                         onClick={() => toggleLine(page.page_index, lineIdx)}
-                        onContextMenu={(e) => {
-                          if (e.ctrlKey) {
+                        onMouseDown={(e) => {
+                          if (e.button === 2 && e.ctrlKey) {
                             e.preventDefault();
-                            toggleExcludeLine(page.page_index, lineIdx);
+                            const key = boundaryKey(page.page_index, lineIdx);
+                            const adding =
+                              !stateRef.current.excludedLines.has(key);
+                            dragRef.current = {
+                              adding,
+                              startKey: key,
+                              currentKeys: new Set([key]),
+                            };
+                            setDragKeys(new Set([key]));
                           }
+                        }}
+                        onMouseEnter={() => {
+                          if (!dragRef.current) return;
+                          const endKey = boundaryKey(page.page_index, lineIdx);
+                          const allKeys = allLineKeysRef.current;
+                          const startIdx = allKeys.indexOf(
+                            dragRef.current.startKey,
+                          );
+                          const endIdx = allKeys.indexOf(endKey);
+                          if (startIdx === -1 || endIdx === -1) return;
+                          const lo = Math.min(startIdx, endIdx);
+                          const hi = Math.max(startIdx, endIdx);
+                          const range = new Set(allKeys.slice(lo, hi + 1));
+                          dragRef.current.currentKeys = range;
+                          setDragKeys(range);
+                        }}
+                        onContextMenu={(e) => {
+                          if (e.ctrlKey) e.preventDefault();
                         }}
                         className="boundary-line"
                         style={{
@@ -288,7 +372,14 @@ export default function SegmentBoundaryEditor() {
                           fontSize: "0.8rem",
                           lineHeight: 1.5,
                           borderRadius: "3px",
-                          background: isBoundary ? "#eef2ff" : undefined,
+                          background: isBoundary
+                            ? "#eef2ff"
+                            : dragKeys.has(key)
+                              ? "#fef9c3"
+                              : undefined,
+                          outline: dragKeys.has(key)
+                            ? "1px solid #fbbf24"
+                            : undefined,
                           textDecoration: isLineExcluded
                             ? "line-through"
                             : undefined,
@@ -340,8 +431,8 @@ export default function SegmentBoundaryEditor() {
         </div>
 
         <p style={{ margin: 0, fontSize: "0.75rem", color: "#6b7280" }}>
-          Click any line to start a new segment. Ctrl + right-click to remove a
-          line.
+          Click any line to start a new segment. Ctrl+right-click to exclude a
+          line; Ctrl+right-click and drag to exclude a range.
         </p>
 
         <div
