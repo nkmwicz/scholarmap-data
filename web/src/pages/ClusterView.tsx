@@ -43,11 +43,12 @@ export default function ClusterView() {
   const [chunkPageIdx, setChunkPageIdx] = useState(0);
   const [clusterBarOpen, setClusterBarOpen] = useState(true);
   // Gallica calibration
-  const [gallicaBannerOpen, setGallicaBannerOpen] = useState(true);
+  const [gallicaBannerOpen, setGallicaBannerOpen] = useState(false);
   const [firstSegmentPage, setFirstSegmentPage] = useState<number | null>(null);
   const [firstSegmentTitle, setFirstSegmentTitle] = useState("");
   const [firstSegmentMarkdown, setFirstSegmentMarkdown] = useState("");
   const [gallicaUrl, setGallicaUrl] = useState("");
+  const [gallicaOcrPage, setGallicaOcrPage] = useState("");
   const [gallicaFolio, setGallicaFolio] = useState("");
   const [savingGallica, setSavingGallica] = useState(false);
   const [error, setError] = useState("");
@@ -86,10 +87,11 @@ export default function ClusterView() {
   }, [bookId]);
 
   const saveGallica = async () => {
-    if (!gallicaUrl || !gallicaFolio || firstSegmentPage === null) return;
+    if (!gallicaUrl || !gallicaFolio || !gallicaOcrPage) return;
     const folio = parseInt(gallicaFolio, 10);
-    if (isNaN(folio)) return;
-    const offset = folio - firstSegmentPage;
+    const ocrPage = parseInt(gallicaOcrPage, 10); // 1-based as shown in viewer
+    if (isNaN(folio) || isNaN(ocrPage) || ocrPage < 1) return;
+    const offset = folio - (ocrPage - 1); // convert 1-based OCR page to 0-based index
     setSavingGallica(true);
     try {
       const updated = await api.books.setGallica(
@@ -98,6 +100,7 @@ export default function ClusterView() {
         offset,
       );
       setBook(updated);
+      setGallicaBannerOpen(false);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to save");
     } finally {
@@ -213,6 +216,33 @@ export default function ClusterView() {
             {error}
           </span>
         )}
+        {book?.gallica_url && !gallicaBannerOpen && (
+          <button
+            onClick={() => {
+              setGallicaUrl(book.gallica_url!);
+              if (firstSegmentPage !== null && book.gallica_offset !== null) {
+                const refPage1 = firstSegmentPage + 1; // 1-based
+                setGallicaOcrPage(String(refPage1));
+                setGallicaFolio(
+                  String(firstSegmentPage + book.gallica_offset!),
+                );
+              }
+              setGallicaBannerOpen(true);
+            }}
+            style={{
+              marginLeft: "auto",
+              fontSize: "0.72rem",
+              padding: "0.15rem 0.55rem",
+              background: "transparent",
+              color: "#6b7280",
+              border: "1px solid #e5e7eb",
+              borderRadius: 5,
+              cursor: "pointer",
+            }}
+          >
+            ⚙ Recalibrate Gallica
+          </button>
+        )}
       </div>
 
       {/* Gallica calibration banner */}
@@ -249,7 +279,7 @@ export default function ClusterView() {
           </button>
         </div>
       )}
-      {book && !book.gallica_url && gallicaBannerOpen && (
+      {book && gallicaBannerOpen && (
         <div
           style={{
             background: "#fffbeb",
@@ -322,7 +352,9 @@ export default function ClusterView() {
                 alignItems: "center",
               }}
             >
-              Set up Gallica image viewer
+              {book?.gallica_url
+                ? "Recalibrate Gallica image viewer"
+                : "Set up Gallica image viewer"}
               <button
                 onClick={() => setGallicaBannerOpen(false)}
                 title="Collapse"
@@ -367,7 +399,12 @@ export default function ClusterView() {
               e.g. https://gallica.bnf.fr/ark:/12148/btv1b8626747s
             </div>
             <div
-              style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.4rem",
+                flexDirection: "column",
+              }}
             >
               <label
                 style={{
@@ -376,12 +413,34 @@ export default function ClusterView() {
                   whiteSpace: "nowrap",
                 }}
               >
-                Gallica folio for OCR page{" "}
-                {firstSegmentPage !== null ? firstSegmentPage + 1 : "?"}
+                OCR page
               </label>
               <input
                 type="number"
-                placeholder="e.g. 8"
+                placeholder="e.g. 26"
+                value={gallicaOcrPage}
+                onChange={(e) => setGallicaOcrPage(e.target.value)}
+                style={{
+                  width: 70,
+                  padding: "0.3rem 0.5rem",
+                  fontSize: "0.78rem",
+                  border: "1px solid #fcd34d",
+                  borderRadius: 6,
+                }}
+              />
+              <label
+                style={{
+                  fontSize: "0.75rem",
+                  color: "#78350f",
+                  whiteSpace: "nowrap",
+                  marginLeft: "0.4rem",
+                }}
+              >
+                = Gallica folio
+              </label>
+              <input
+                type="number"
+                placeholder="e.g. 28"
                 value={gallicaFolio}
                 onChange={(e) => setGallicaFolio(e.target.value)}
                 style={{
@@ -395,7 +454,9 @@ export default function ClusterView() {
             </div>
             <button
               onClick={saveGallica}
-              disabled={savingGallica || !gallicaUrl || !gallicaFolio}
+              disabled={
+                savingGallica || !gallicaUrl || !gallicaFolio || !gallicaOcrPage
+              }
               style={{
                 padding: "0.3rem 0.9rem",
                 fontSize: "0.78rem",
@@ -406,7 +467,12 @@ export default function ClusterView() {
                 borderRadius: 6,
                 cursor: "pointer",
                 opacity:
-                  savingGallica || !gallicaUrl || !gallicaFolio ? 0.5 : 1,
+                  savingGallica ||
+                  !gallicaUrl ||
+                  !gallicaFolio ||
+                  !gallicaOcrPage
+                    ? 0.5
+                    : 1,
               }}
             >
               {savingGallica ? "Saving…" : "Save"}
@@ -416,7 +482,7 @@ export default function ClusterView() {
       )}
 
       {/* Browser body */}
-      {(!book || !!book.gallica_url || !gallicaBannerOpen) && (
+      {(!book || !gallicaBannerOpen) && (
         <div
           style={{
             display: "flex",
