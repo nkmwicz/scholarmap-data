@@ -116,6 +116,17 @@ export interface ChapterSummary {
   events_referenced: string[];
 }
 
+export interface ClusterChunk {
+  chunk_id: string;
+  chunk_index: number;
+  text: string;
+  segment_id: string;
+  segment_index: number;
+  segment_title: string;
+  page_range: number[];
+  ai_summary: ChapterSummary | null;
+}
+
 export interface Segment {
   id: string;
   segment_index: number;
@@ -268,5 +279,15 @@ export const api = {
     list: (bookId: string) => request<Cluster[]>(`/books/${bookId}/clusters`),
     segments: (bookId: string, clusterId: string) =>
       request<Segment[]>(`/books/${bookId}/clusters/${clusterId}/segments`),
+    chunks: (bookId: string, clusterId: string) =>
+      request<ClusterChunk[]>(`/books/${bookId}/clusters/${clusterId}/chunks`),
+  },
+
+  chunks: {
+    summarize: (bookId: string, chunkId: string, force = false) =>
+      request<{ chunk_id: string; ai_summary: ChapterSummary | null }>(
+        `/books/${bookId}/chunks/${chunkId}/summary?force=${force}`,
+        { method: "POST" },
+      ),
   },
 };

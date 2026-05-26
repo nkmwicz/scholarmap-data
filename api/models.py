@@ -159,6 +159,10 @@ class SegmentChunk(Base):
     text: Mapped[str] = mapped_column(Text, nullable=False)
     word_length: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     embedding: Mapped[Optional[list[float]]] = mapped_column(Vector(384), nullable=True)
+    page_range: Mapped[list[int]] = mapped_column(
+        ARRAY(Integer), nullable=False, default=list
+    )
+    ai_summary: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
     segment: Mapped["Segment"] = relationship("Segment", back_populates="chunks")
     memberships: Mapped[list["ClusterMembership"]] = relationship(

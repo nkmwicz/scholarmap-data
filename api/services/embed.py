@@ -61,14 +61,28 @@ async def embed_book(book_id: uuid.UUID, db: AsyncSession) -> int:
     all_chunks: list[SegmentChunk] = []
     all_texts: list[str] = []
 
+    step = max(1, max_words - CHUNK_OVERLAP)
+
     for seg in segments:
         chunks = _chunk_text(seg.markdown, max_words)
+        seg_total_words = _word_len(seg.markdown)
+        n_pages = len(seg.page_range) if seg.page_range else 0
         for idx, chunk_text in enumerate(chunks):
+            wlen = _word_len(chunk_text)
+            if seg_total_words > 0 and n_pages > 0:
+                word_start = idx * step
+                word_end = min(word_start + wlen, seg_total_words)
+                ps = min(int(word_start / seg_total_words * n_pages), n_pages - 1)
+                pe = min(int(word_end / seg_total_words * n_pages), n_pages - 1)
+                chunk_page_range = seg.page_range[ps : pe + 1] or seg.page_range
+            else:
+                chunk_page_range = seg.page_range or []
             sc = SegmentChunk(
                 segment_id=seg.id,
                 chunk_index=idx,
                 text=chunk_text,
-                word_length=_word_len(chunk_text),
+                word_length=wlen,
+                page_range=chunk_page_range,
             )
             all_chunks.append(sc)
             all_texts.append(chunk_text)

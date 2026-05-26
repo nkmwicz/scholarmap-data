@@ -54,6 +54,26 @@ class ClusterSegmentOut(BaseModel):
     neo4j_entered: bool = False
 
 
+class ClusterChunkOut(BaseModel):
+    chunk_id: uuid.UUID
+    chunk_index: int
+    text: str
+    segment_id: uuid.UUID
+    segment_index: int
+    segment_title: str
+    page_range: list[int]
+    ai_summary: dict | None = None
+
+
+def _derive_segment_title(seg: Segment) -> str:
+    """Return first # heading from markdown, else stored title, else fallback."""
+    for line in (seg.markdown or "").splitlines():
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            return stripped.lstrip("#").strip()
+    return seg.title or f"Segment {seg.segment_index + 1}"
+
+
 @router.post("/{book_id}/cluster", status_code=202)
 async def trigger_cluster(
     book_id: uuid.UUID,
@@ -209,6 +229,38 @@ async def get_cluster_segments(
             )
         )
     return out
+
+
+@router.get(
+    "/{book_id}/clusters/{cluster_id}/chunks", response_model=list[ClusterChunkOut]
+)
+async def get_cluster_chunks(
+    book_id: uuid.UUID,
+    cluster_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(SegmentChunk, Segment)
+        .join(Segment, Segment.id == SegmentChunk.segment_id)
+        .join(ClusterMembership, ClusterMembership.chunk_id == SegmentChunk.id)
+        .where(ClusterMembership.cluster_id == cluster_id)
+        .where(Segment.book_id == book_id)
+        .order_by(Segment.segment_index, SegmentChunk.chunk_index)
+    )
+    rows = result.all()
+    return [
+        ClusterChunkOut(
+            chunk_id=chunk.id,
+            chunk_index=chunk.chunk_index,
+            text=chunk.text,
+            segment_id=seg.id,
+            segment_index=seg.segment_index,
+            segment_title=_derive_segment_title(seg),
+            page_range=chunk.page_range or [],
+            ai_summary=chunk.ai_summary,
+        )
+        for chunk, seg in rows
+    ]
 
 
 @router.get("/{book_id}/clusters", response_model=list[ClusterOut])

@@ -1,6 +1,13 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { api, type Book, type Cluster, type Segment } from "../api/client";
+import {
+  api,
+  type Book,
+  type Cluster,
+  type ClusterChunk,
+  type ChapterSummary,
+  type Segment,
+} from "../api/client";
 import { PanZoom } from "../components/PanZoom";
 import { SegmentSummaryPanel } from "../components/SegmentSummaryPanel";
 import { Neo4jToggleButton } from "../components/Neo4jToggleButton";
@@ -10,6 +17,7 @@ const col: React.CSSProperties = {
   flexDirection: "column",
   overflow: "hidden",
   minHeight: 0,
+  boxSizing: "border-box",
   border: "1px solid #e5e7eb",
   borderRadius: 8,
   background: "#fff",
@@ -23,6 +31,9 @@ export default function ClusterView() {
   const [selectedSub, setSelectedSub] = useState<Cluster | null>(null);
   const [segments, setSegments] = useState<Segment[]>([]);
   const [selectedSegment, setSelectedSegment] = useState<Segment | null>(null);
+  const [chunks, setChunks] = useState<ClusterChunk[]>([]);
+  const [selectedChunk, setSelectedChunk] = useState<ClusterChunk | null>(null);
+  const [generatingSummary, setGeneratingSummary] = useState(false);
   const [loadingSegs, setLoadingSegs] = useState(false);
 
   const [viewMode, setViewMode] = useState<"text" | "images" | "summary">(
@@ -39,6 +50,10 @@ export default function ClusterView() {
   const [gallicaFolio, setGallicaFolio] = useState("");
   const [savingGallica, setSavingGallica] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    setViewMode("text");
+  }, [selectedChunk?.chunk_id]);
 
   useEffect(() => {
     setPageIdx(0);
@@ -93,26 +108,62 @@ export default function ClusterView() {
       ? `${book.gallica_url}/f${page + book.gallica_offset!}.highres`
       : null;
 
-  const topClusters = clusters.filter((c) => !c.is_subcluster);
+  const isChapters = book?.document_type === "chapters";
   const subMap = clusters.reduce<Record<string, Cluster[]>>((acc, c) => {
     if (c.is_subcluster && c.parent_cluster_id)
       acc[c.parent_cluster_id] = [...(acc[c.parent_cluster_id] ?? []), c];
     return acc;
   }, {});
 
+  const topClusters = clusters.filter((c) => !c.is_subcluster);
+
   const fetchSegments = (clusterId: string) => {
     setLoadingSegs(true);
     setSelectedSegment(null);
-    api.clusters
-      .segments(bookId!, clusterId)
-      .then((s) => {
-        setSegments(s);
-        setLoadingSegs(false);
-      })
-      .catch((e) => {
-        setError(e.message);
-        setLoadingSegs(false);
-      });
+    setSelectedChunk(null);
+    if (isChapters) {
+      api.clusters
+        .chunks(bookId!, clusterId)
+        .then((c) => {
+          setChunks(c);
+          setLoadingSegs(false);
+        })
+        .catch((e) => {
+          setError(e.message);
+          setLoadingSegs(false);
+        });
+    } else {
+      api.clusters
+        .segments(bookId!, clusterId)
+        .then((s) => {
+          setSegments(s);
+          setLoadingSegs(false);
+        })
+        .catch((e) => {
+          setError(e.message);
+          setLoadingSegs(false);
+        });
+    }
+  };
+
+  const generateChunkSummary = async () => {
+    if (!selectedChunk) return;
+    setGeneratingSummary(true);
+    try {
+      const result = await api.chunks.summarize(
+        bookId!,
+        selectedChunk.chunk_id,
+      );
+      const updated = { ...selectedChunk, ai_summary: result.ai_summary };
+      setSelectedChunk(updated);
+      setChunks((prev) =>
+        prev.map((c) => (c.chunk_id === updated.chunk_id ? updated : c)),
+      );
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to generate summary");
+    } finally {
+      setGeneratingSummary(false);
+    }
   };
 
   const selectCluster = (c: Cluster) => {
@@ -528,8 +579,7 @@ export default function ClusterView() {
           {/* Body: letter list + letter view */}
           <div
             style={{
-              display: "grid",
-              gridTemplateColumns: "280px 1fr",
+              display: "flex",
               gap: "0.75rem",
               flex: 1,
               minHeight: 0,
@@ -537,7 +587,7 @@ export default function ClusterView() {
             }}
           >
             {/* Letter list */}
-            <div style={col}>
+            <div style={{ ...col, width: 280, flexShrink: 0 }}>
               {selectedCluster || selectedSub ? (
                 <>
                   <div
@@ -558,7 +608,7 @@ export default function ClusterView() {
                         ? (selectedSub.tags[0] ?? "Sub-cluster")
                         : `Cluster ${
                             (selectedCluster?.cluster_index ?? 0) + 1
-                          } — all letters`}
+                          } — all ${isChapters ? "chunks" : "letters"}`}
                     </div>
                     <div
                       style={{
@@ -569,102 +619,145 @@ export default function ClusterView() {
                     >
                       {loadingSegs
                         ? "Loading…"
-                        : `${segments.length} letter${
-                            segments.length !== 1 ? "s" : ""
-                          }`}
+                        : isChapters
+                          ? `${chunks.length} chunk${chunks.length !== 1 ? "s" : ""}`
+                          : `${segments.length} letter${segments.length !== 1 ? "s" : ""}`}
                     </div>
                   </div>
                   <div style={{ overflowY: "auto", flex: 1 }}>
-                    {segments.map((seg) => (
-                      <button
-                        key={seg.id}
-                        onClick={() => setSelectedSegment(seg)}
-                        style={{
-                          width: "100%",
-                          textAlign: "left",
-                          border: "none",
-                          borderBottom: "1px solid #f3f4f6",
-                          padding: "0.55rem 0.75rem",
-                          cursor: "pointer",
-                          background:
-                            selectedSegment?.id === seg.id
-                              ? "#f0f9ff"
-                              : "transparent",
-                        }}
-                      >
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "0.35rem",
-                          }}
-                        >
-                          <span
+                    {isChapters
+                      ? chunks.map((chunk) => (
+                          <button
+                            key={chunk.chunk_id}
+                            onClick={() => setSelectedChunk(chunk)}
                             style={{
-                              fontWeight: 500,
-                              fontSize: "0.78rem",
-                              color: "#111827",
-                              flex: 1,
+                              width: "100%",
+                              textAlign: "left",
+                              border: "none",
+                              borderBottom: "1px solid #f3f4f6",
+                              padding: "0.55rem 0.75rem",
+                              cursor: "pointer",
+                              background:
+                                selectedChunk?.chunk_id === chunk.chunk_id
+                                  ? "#f0f9ff"
+                                  : "transparent",
                             }}
                           >
-                            {seg.title || `Letter ${seg.segment_index + 1}`}
-                          </span>
-                          {seg.neo4j_entered && (
-                            <span
-                              title="In Neo4j"
+                            <div
                               style={{
-                                fontSize: "0.65rem",
-                                color: "#16a34a",
-                                flexShrink: 0,
-                                lineHeight: 1,
+                                fontWeight: 500,
+                                fontSize: "0.78rem",
+                                color: "#111827",
+                                marginBottom: "0.1rem",
                               }}
                             >
-                              ✓
-                            </span>
-                          )}
-                        </div>
-                        {seg.page_range.length > 0 && (
-                          <div
+                              {chunk.segment_title}
+                            </div>
+                            <div
+                              style={{ fontSize: "0.68rem", color: "#9ca3af" }}
+                            >
+                              {"Chunk " + (chunk.chunk_index + 1)}
+                              {chunk.page_range.length > 0 &&
+                                " · pp. " +
+                                  (chunk.page_range[0] + 1) +
+                                  "–" +
+                                  (chunk.page_range[
+                                    chunk.page_range.length - 1
+                                  ] +
+                                    1)}
+                            </div>
+                          </button>
+                        ))
+                      : segments.map((seg) => (
+                          <button
+                            key={seg.id}
+                            onClick={() => setSelectedSegment(seg)}
                             style={{
-                              fontSize: "0.68rem",
-                              color: "#9ca3af",
-                              marginTop: "0.1rem",
+                              width: "100%",
+                              textAlign: "left",
+                              border: "none",
+                              borderBottom: "1px solid #f3f4f6",
+                              padding: "0.55rem 0.75rem",
+                              cursor: "pointer",
+                              background:
+                                selectedSegment?.id === seg.id
+                                  ? "#f0f9ff"
+                                  : "transparent",
                             }}
                           >
-                            p. {seg.page_range[0]}–
-                            {seg.page_range[seg.page_range.length - 1]}
-                          </div>
-                        )}
-                        {(seg.cluster_labels?.length ?? 0) > 0 && (
-                          <div
-                            style={{
-                              marginTop: "0.25rem",
-                              display: "flex",
-                              flexWrap: "wrap",
-                              gap: "0.2rem",
-                            }}
-                          >
-                            {seg.cluster_labels?.map((lbl, i) => (
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "0.35rem",
+                              }}
+                            >
                               <span
-                                key={i}
                                 style={{
-                                  background: "#f3f4f6",
-                                  color: "#374151",
-                                  padding: "0.05rem 0.35rem",
-                                  borderRadius: 9999,
-                                  fontSize: "0.62rem",
-                                  fontFamily: "monospace",
+                                  fontWeight: 500,
+                                  fontSize: "0.78rem",
+                                  color: "#111827",
+                                  flex: 1,
                                 }}
                               >
-                                {lbl.sub_index !== null
-                                  ? `${lbl.parent_index + 1}(${lbl.sub_index + 1})`
-                                  : `${lbl.parent_index + 1}`}
+                                {seg.title || `Letter ${seg.segment_index + 1}`}
                               </span>
-                            ))}
-                          </div>
-                        )}
-                      </button>
-                    ))}
+                              {seg.neo4j_entered && (
+                                <span
+                                  title="In Neo4j"
+                                  style={{
+                                    fontSize: "0.65rem",
+                                    color: "#16a34a",
+                                    flexShrink: 0,
+                                    lineHeight: 1,
+                                  }}
+                                >
+                                  ✓
+                                </span>
+                              )}
+                            </div>
+                            {seg.page_range.length > 0 && (
+                              <div
+                                style={{
+                                  fontSize: "0.68rem",
+                                  color: "#9ca3af",
+                                  marginTop: "0.1rem",
+                                }}
+                              >
+                                p. {seg.page_range[0]}–
+                                {seg.page_range[seg.page_range.length - 1]}
+                              </div>
+                            )}
+                            {(seg.cluster_labels?.length ?? 0) > 0 && (
+                              <div
+                                style={{
+                                  marginTop: "0.25rem",
+                                  display: "flex",
+                                  flexWrap: "wrap",
+                                  gap: "0.2rem",
+                                }}
+                              >
+                                {seg.cluster_labels?.map((lbl, i) => (
+                                  <span
+                                    key={i}
+                                    style={{
+                                      background: "#f3f4f6",
+                                      color: "#374151",
+                                      padding: "0.05rem 0.35rem",
+                                      borderRadius: 9999,
+                                      fontSize: "0.62rem",
+                                      fontFamily: "monospace",
+                                    }}
+                                  >
+                                    {lbl.sub_index !== null
+                                      ? `${lbl.parent_index + 1}(${lbl.sub_index + 1})`
+                                      : `${lbl.parent_index + 1}`}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </button>
+                        ))}
                   </div>
                 </>
               ) : (
@@ -680,9 +773,233 @@ export default function ClusterView() {
               )}
             </div>
 
-            {/* Letter view */}
-            <div style={col}>
-              {selectedSegment ? (
+            {/* Chunk view (chapters) */}
+            <div style={{ ...col, flex: 1 }}>
+              {isChapters ? (
+                selectedChunk ? (
+                  <>
+                    {/* Chunk header */}
+                    <div
+                      style={{
+                        padding: "0.75rem 1rem",
+                        borderBottom: "1px solid #e5e7eb",
+                        flexShrink: 0,
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "flex-start",
+                        gap: "1rem",
+                      }}
+                    >
+                      <div>
+                        <h3 style={{ margin: "0 0 0.2rem", fontSize: "1rem" }}>
+                          {selectedChunk.segment_title}
+                        </h3>
+                        <span style={{ fontSize: "0.75rem", color: "#6b7280" }}>
+                          {"Chunk " + (selectedChunk.chunk_index + 1)}
+                          {selectedChunk.page_range.length > 0
+                            ? " · pp. " +
+                              (selectedChunk.page_range[0] + 1) +
+                              "–" +
+                              (selectedChunk.page_range[
+                                selectedChunk.page_range.length - 1
+                              ] +
+                                1)
+                            : " · pp. ?"}
+                        </span>
+                      </div>
+                      {/* Text | Summary ribbon */}
+                      <div
+                        style={{
+                          display: "flex",
+                          border: "1px solid #e5e7eb",
+                          borderRadius: 6,
+                          overflow: "hidden",
+                          flexShrink: 0,
+                        }}
+                      >
+                        {(["text", "summary"] as const).map((mode) => (
+                          <button
+                            key={mode}
+                            onClick={() => setViewMode(mode)}
+                            style={{
+                              padding: "0.2rem 0.65rem",
+                              fontSize: "0.72rem",
+                              fontWeight: 500,
+                              border: "none",
+                              cursor: "pointer",
+                              background:
+                                viewMode === mode ? "#1e40af" : "transparent",
+                              color: viewMode === mode ? "#fff" : "#374151",
+                            }}
+                          >
+                            {mode === "text" ? "Text" : "Summary"}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {/* Chunk text */}
+                    {viewMode === "text" && (
+                      <div
+                        style={{
+                          overflowY: "auto",
+                          flex: 1,
+                          minHeight: 0,
+                          padding: "1rem 1.25rem",
+                          fontFamily: "Georgia, serif",
+                          fontSize: "0.9rem",
+                          lineHeight: 1.8,
+                          color: "#1f2937",
+                          whiteSpace: "pre-wrap",
+                        }}
+                      >
+                        {selectedChunk.text}
+                      </div>
+                    )}
+                    {/* Chunk summary */}
+                    {viewMode === "summary" && (
+                      <div
+                        style={{
+                          flex: 1,
+                          minHeight: 0,
+                          overflowY: "auto",
+                          padding: "1rem 1.25rem",
+                        }}
+                      >
+                        {selectedChunk.ai_summary ? (
+                          (() => {
+                            const s =
+                              selectedChunk.ai_summary as ChapterSummary;
+                            return (
+                              <div>
+                                {s.summary && (
+                                  <p
+                                    style={{
+                                      margin: "0 0 0.75rem",
+                                      fontSize: "0.82rem",
+                                      color: "#374151",
+                                      lineHeight: 1.6,
+                                    }}
+                                  >
+                                    {s.summary}
+                                  </p>
+                                )}
+                                {[
+                                  {
+                                    title: "People",
+                                    items: s.people_referenced,
+                                  },
+                                  {
+                                    title: "Places",
+                                    items: s.places_referenced,
+                                  },
+                                  {
+                                    title: "Events",
+                                    items: s.events_referenced,
+                                  },
+                                ].map(
+                                  ({ title, items }) =>
+                                    items?.length > 0 && (
+                                      <div
+                                        key={title}
+                                        style={{ marginBottom: "0.6rem" }}
+                                      >
+                                        <div
+                                          style={{
+                                            fontSize: "0.7rem",
+                                            fontWeight: 700,
+                                            textTransform: "uppercase",
+                                            letterSpacing: "0.06em",
+                                            color: "#9ca3af",
+                                            marginBottom: "0.25rem",
+                                          }}
+                                        >
+                                          {title}
+                                        </div>
+                                        <div
+                                          style={{
+                                            display: "flex",
+                                            flexWrap: "wrap",
+                                            gap: "0.3rem",
+                                          }}
+                                        >
+                                          {items.map((item, i) => (
+                                            <span
+                                              key={i}
+                                              style={{
+                                                fontSize: "0.75rem",
+                                                padding: "0.15rem 0.55rem",
+                                                borderRadius: 9999,
+                                                background: "#f3f4f6",
+                                                color: "#374151",
+                                                border: "1px solid #e5e7eb",
+                                              }}
+                                            >
+                                              {item}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    ),
+                                )}
+                              </div>
+                            );
+                          })()
+                        ) : (
+                          <div
+                            style={{
+                              display: "flex",
+                              flexDirection: "column",
+                              alignItems: "center",
+                              gap: "0.75rem",
+                              paddingTop: "2rem",
+                            }}
+                          >
+                            <p
+                              style={{
+                                margin: 0,
+                                fontSize: "0.82rem",
+                                color: "#9ca3af",
+                                textAlign: "center",
+                              }}
+                            >
+                              No summary generated yet.
+                            </p>
+                            {generatingSummary ? (
+                              <span
+                                style={{
+                                  fontSize: "0.82rem",
+                                  color: "#9ca3af",
+                                }}
+                              >
+                                Generating…
+                              </span>
+                            ) : (
+                              <button
+                                className="btn btn-primary"
+                                onClick={generateChunkSummary}
+                                style={{ fontSize: "0.82rem" }}
+                              >
+                                Generate Summary
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div
+                    style={{
+                      padding: "1rem",
+                      color: "#9ca3af",
+                      fontSize: "0.85rem",
+                    }}
+                  >
+                    Select a chunk to read it.
+                  </div>
+                )
+              ) : /* Letter view */
+              selectedSegment ? (
                 <>
                   <div
                     style={{
