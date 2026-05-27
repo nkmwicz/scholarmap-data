@@ -47,6 +47,7 @@ export default function ClusterView() {
   const [pageIdx, setPageIdx] = useState(0);
   const [chunkPageIdx, setChunkPageIdx] = useState(0);
   const [clusterBarOpen, setClusterBarOpen] = useState(true);
+  const [summaryPinned, setSummaryPinned] = useState(false);
   // Gallica calibration
   const [gallicaBannerOpen, setGallicaBannerOpen] = useState(false);
   const [firstSegmentPage, setFirstSegmentPage] = useState<number | null>(null);
@@ -204,6 +205,7 @@ export default function ClusterView() {
   const selectCluster = (c: Cluster) => {
     setSelectedCluster(c);
     setSelectedSub(null);
+    setSummaryPinned(false);
     fetchSegments(c.id);
   };
 
@@ -212,6 +214,7 @@ export default function ClusterView() {
     setSelectedCluster(
       clusters.find((c) => c.id === sub.parent_cluster_id) ?? null,
     );
+    setSummaryPinned(false);
     fetchSegments(sub.id);
   };
 
@@ -566,7 +569,20 @@ export default function ClusterView() {
                     flexShrink: 0,
                     position: "relative",
                   }}
-                  className="cluster-strip"
+                  className={`cluster-strip${summaryPinned ? " summary-pinned" : ""}`}
+                  onClick={() => summary && setSummaryPinned((p) => !p)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                    padding: "0.25rem 0.75rem",
+                    background: selectedSub ? "#ede9fe" : "#f5f3ff",
+                    border: `1px solid ${selectedSub ? "#c4b5fd" : "#ddd6fe"}`,
+                    borderRadius: 9999,
+                    flexShrink: 0,
+                    position: "relative",
+                    cursor: summary ? "pointer" : "default",
+                  }}
                 >
                   <span
                     style={{
