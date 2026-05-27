@@ -275,7 +275,12 @@ def estimate_num_clusters(embeddings: np.ndarray, sample_size: int = 1000) -> in
         int: Estimated number of clusters.
     """
     n = embeddings.shape[0]
-    cube_root_k = max(2, round(n ** (1 / 3)) * 2)
+    # Base cube root, used independently for the floor and the eigenvalue search cap.
+    cube_root_base = max(2, round(n ** (1 / 3)))
+    # Use *2 multiplier for small corpora (<750) to ensure enough granularity;
+    # drop it for larger corpora where cube-root alone already produces sufficient clusters.
+    cube_root_multiplier = 2 if n < 750 else 1
+    cube_root_k = cube_root_base * cube_root_multiplier
 
     # Sample if n exceeds sample_size, otherwise use all
     if n > sample_size:
@@ -302,8 +307,9 @@ def estimate_num_clusters(embeddings: np.ndarray, sample_size: int = 1000) -> in
     eigenvalues = np.linalg.eigvalsh(L_sym)
     eigenvalues = np.sort(eigenvalues)
 
-    # Find the largest gap between consecutive eigenvalues in range [2, cube_root_k * 2]
-    max_search = min(cube_root_k * 2, len(eigenvalues) - 1)
+    # Search up to 4x the base cube root regardless of the floor multiplier, so the
+    # eigenvalue gap method retains full range to detect strong deviance in large corpora.
+    max_search = min(cube_root_base * 4, len(eigenvalues) - 1)
     gaps = np.diff(eigenvalues[1 : max_search + 1])
     eigenvalue_gap_k = int(np.argmax(gaps)) + 2  # +2: 0-index offset + gap->count
 

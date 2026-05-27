@@ -82,9 +82,14 @@ async def _do_clustering(book_id: uuid.UUID, db: AsyncSession) -> None:
     await db.flush()
 
     # ── Sub-clusters ──────────────────────────────────────────────────────────
+    MIN_SUBCLUSTER_SIZE = (
+        100  # minimum parent-cluster members required to trigger subclustering
+    )
     sub_memberships: list[ClusterMembership] = []
     for ci, db_cluster in enumerate(db_clusters):
         member_indices = cluster_to_indices[ci]
+        if len(member_indices) < MIN_SUBCLUSTER_SIZE:
+            continue
         k = int(len(member_indices) ** (1 / 3))
         if k < 3:
             continue
