@@ -56,6 +56,8 @@ export default function ClusterView() {
   const [gallicaOcrPage, setGallicaOcrPage] = useState("");
   const [gallicaFolio, setGallicaFolio] = useState("");
   const [savingGallica, setSavingGallica] = useState(false);
+  const [gallicaSaved, setGallicaSaved] = useState(false);
+  const [gallicaSaveError, setGallicaSaveError] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -111,6 +113,8 @@ export default function ClusterView() {
     if (isNaN(folio) || isNaN(ocrPage) || ocrPage < 1) return;
     const offset = folio - (ocrPage - 1); // convert 1-based OCR page to 0-based index
     setSavingGallica(true);
+    setGallicaSaveError("");
+    setGallicaSaved(false);
     try {
       const updated = await api.books.setGallica(
         bookId!,
@@ -118,9 +122,10 @@ export default function ClusterView() {
         offset,
       );
       setBook(updated);
-      setGallicaBannerOpen(false);
+      setGallicaSaved(true);
+      setTimeout(() => setGallicaSaved(false), 3000);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to save");
+      setGallicaSaveError(e instanceof Error ? e.message : "Failed to save");
     } finally {
       setSavingGallica(false);
     }
@@ -502,6 +507,24 @@ export default function ClusterView() {
             >
               {savingGallica ? "Saving…" : "Save"}
             </button>
+            {gallicaSaved && (
+              <div
+                style={{
+                  color: "#15803d",
+                  fontSize: "0.72rem",
+                  fontWeight: 600,
+                }}
+              >
+                ✓ Saved — offset ={" "}
+                {parseInt(gallicaFolio, 10) -
+                  (parseInt(gallicaOcrPage, 10) - 1)}
+              </div>
+            )}
+            {gallicaSaveError && (
+              <div style={{ color: "#dc2626", fontSize: "0.72rem" }}>
+                {gallicaSaveError}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1081,31 +1104,23 @@ export default function ClusterView() {
                       </PanZoom>
                     </div>
                     {/* Chunk text */}
-                    {viewMode === "text" &&
-                      (segmentChunks.length > 0 ? (
-                        <ChunkedSegmentText
-                          chunks={segmentChunks}
-                          clusters={clusters}
-                          activeParentIndex={activeParentIndex}
-                          activeSubIndex={activeSubIndex}
-                        />
-                      ) : (
-                        <div
-                          style={{
-                            overflowY: "auto",
-                            flex: 1,
-                            minHeight: 0,
-                            padding: "1rem 1.25rem",
-                            fontFamily: "Georgia, serif",
-                            fontSize: "0.9rem",
-                            lineHeight: 1.8,
-                            color: "#1f2937",
-                            whiteSpace: "pre-wrap",
-                          }}
-                        >
-                          {selectedChunk.text}
-                        </div>
-                      ))}
+                    {viewMode === "text" && (
+                      <div
+                        style={{
+                          overflowY: "auto",
+                          flex: 1,
+                          minHeight: 0,
+                          padding: "1rem 1.25rem",
+                          fontFamily: "Georgia, serif",
+                          fontSize: "0.9rem",
+                          lineHeight: 1.8,
+                          color: "#1f2937",
+                          whiteSpace: "pre-wrap",
+                        }}
+                      >
+                        {selectedChunk.text}
+                      </div>
+                    )}
                     {/* Chunk summary */}
                     {viewMode === "summary" && (
                       <div
