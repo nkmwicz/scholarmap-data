@@ -21,32 +21,20 @@ services:
     build:
       context: .
       dockerfile: api/Dockerfile
-      args:
-        USE_GPU: ${USE_GPU:-false}
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql+asyncpg://scholarmap:${POSTGRES_PASSWORD:-scholarmap}@db:5432/scholarmap
       MISTRAL_KEY: ${MISTRAL_KEY}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      COHERE_API_KEY: ${COHERE_API_KEY}
     volumes:
       - ./books_work:/app/books_work
-      - model_cache:/root/.cache/huggingface
     ports:
       - "8000:8000"
     depends_on:
       db:
         condition: service_healthy
-    # GPU passthrough — only active when NVIDIA Container Toolkit is installed and
-    # USE_GPU=true is set in .env. Safe to leave in place on CPU-only machines;
-    # Docker ignores it when no GPU runtime is available.
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
     develop:
       watch:
         - action: sync+restart
@@ -72,4 +60,3 @@ services:
 
 volumes:
   postgres_data:
-  model_cache:

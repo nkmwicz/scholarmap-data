@@ -28,6 +28,7 @@ async def trigger_embed(
         "clustered",
         "labeling",
         "labeled",
+        "error",
     ):
         raise HTTPException(
             400, f"Book must have segments before embedding, currently: {book.status}"

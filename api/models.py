@@ -158,7 +158,9 @@ class SegmentChunk(Base):
     chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
     text: Mapped[str] = mapped_column(Text, nullable=False)
     word_length: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    embedding: Mapped[Optional[list[float]]] = mapped_column(Vector(384), nullable=True)
+    embedding: Mapped[Optional[list[float]]] = mapped_column(
+        Vector(1536), nullable=True
+    )
     page_range: Mapped[list[int]] = mapped_column(
         ARRAY(Integer), nullable=False, default=list
     )

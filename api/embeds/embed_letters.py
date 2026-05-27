@@ -1,42 +1,63 @@
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-import polars as pl
-from typing import List
-from sentence_transformers import SentenceTransformer
+import os
 import time
+from typing import List
+
+import cohere
+import polars as pl
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+_co = cohere.ClientV2(api_key=os.environ["COHERE_API_KEY"])
+
+_EMBED_MODEL = "embed-v4.0"
+_EMBED_DIM = 1536
+_BATCH_SIZE = 96   # Cohere API limit per call
+_INTER_BATCH_DELAY = 0.5   # seconds between batches — ~120 calls/min, well under 2000/min limit
+_MAX_RETRIES = 4
+_RETRY_BASE_WAIT = 60  # seconds; doubles on each successive 429
 
 
 def word_len(s: str):
     return len(s.split())
 
-#
-#
-# Model Name
-#
-#
-model_name = "ibm-granite/granite-embedding-97m-multilingual-r2"
 
-
-_model = SentenceTransformer(
-    model_name, device="cuda"
-)
-
-
-def encode(sentences: List[str]) -> List[List[float]]:
+def encode(sentences: List[str], input_type: str = "search_document") -> List[List[float]]:
     """
-    Generate embeddings for a list of sentences using the IBM Granite embedding model.
+    Generate embeddings for a list of sentences using Cohere embed-v4.0.
 
     ARGS:
         sentences (List[str]): A list of sentences to generate embeddings for.
+        input_type (str): "search_document" for chunk storage, "search_query" for queries.
     Returns:
-        List[List[float]]: A list of embeddings, where each embedding is a list of floats.
-
+        List[List[float]]: A list of 1536-dim float embeddings.
     """
+    results: List[List[float]] = []
+    for i in range(0, len(sentences), _BATCH_SIZE):
+        batch = sentences[i : i + _BATCH_SIZE]
 
-    embeddings = _model.encode(
-        sentences, 
-        batch_size=1, 
-        show_progress_bar=True)
-    return embeddings.tolist()
+        for attempt in range(_MAX_RETRIES):
+            try:
+                response = _co.embed(
+                    texts=batch,
+                    model=_EMBED_MODEL,
+                    input_type=input_type,
+                    embedding_types=["float"],
+                    output_dimension=_EMBED_DIM,
+                )
+                results.extend(response.embeddings.float_)
+                break  # success — move to next batch
+            except cohere.TooManyRequestsError:
+                if attempt < _MAX_RETRIES - 1:
+                    wait = _RETRY_BASE_WAIT * (2 ** attempt)  # 60s, 120s, 240s
+                    time.sleep(wait)
+                else:
+                    raise
+
+        # Preventative delay between batches to stay well under the rate limit.
+        # Skipped after the last batch.
+        if i + _BATCH_SIZE < len(sentences):
+            time.sleep(_INTER_BATCH_DELAY)
+
+    return results
 
 
 def explode_chunk_text(row):
@@ -112,7 +133,7 @@ def chunk_and_tokenize_letters(df: pl.DataFrame) -> pl.DataFrame:
     texts = df["markdown"].to_list()
     embeddings = encode(texts)
     t3 = time.time()
-    print(f"{"*"*25}\nStart Embedding Process, using the {model_name} model...")
+    print(f"{"*"*25}\nStart Embedding Process, using the {_EMBED_MODEL} model...")
     df = df.with_columns(embedding=pl.Series(embeddings))
     t4 = time.time()
     print(f"{"*"*25}\nCompleted embedding process in {t4 - t3:.2f} seconds.")

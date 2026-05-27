@@ -11,14 +11,7 @@ logger = logging.getLogger("scholarmap")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    import torch
-
-    if torch.cuda.is_available():
-        device_name = torch.cuda.get_device_name(0)
-        vram = torch.cuda.get_device_properties(0).total_memory // (1024**2)
-        logger.info("GPU available: %s (%d MB VRAM)", device_name, vram)
-    else:
-        logger.info("No GPU detected — running on CPU")
+    logger.info("Embeddings powered by Cohere embed-v4.0 (1536-dim, API)")
     yield
 
 

@@ -41,10 +41,10 @@ async def search(payload: SearchQuery, db: AsyncSession = Depends(get_db)):
     if not payload.query.strip():
         return []
 
-    # Lazy import — model loading is expensive; only done when needed
+    # Lazy import — only done when needed
     from api.embeds.embed_letters import encode  # noqa: PLC0415
 
-    embedding = encode([payload.query.strip()])[0]
+    embedding = encode([payload.query.strip()], input_type="search_query")[0]
     vec_str = "[" + ",".join(str(v) for v in embedding) + "]"
 
     rows_result = await db.execute(
