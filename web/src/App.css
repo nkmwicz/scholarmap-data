@@ -47,6 +47,30 @@ body {
 .badge-labeled       { background: #d1fae5; color: #065f46; }
 .badge-error         { background: #fee2e2; color: #991b1b; }
 
+/* Cluster strip summary tooltip */
+.cluster-strip .cluster-summary-tooltip {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  width: 28rem;
+  max-width: 90vw;
+  background: #1e1b4b;
+  color: #ede9fe;
+  font-size: 0.78rem;
+  line-height: 1.55;
+  padding: 0.65rem 0.85rem;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+  z-index: 100;
+  white-space: normal;
+  pointer-events: none;
+}
+
+.cluster-strip:hover .cluster-summary-tooltip {
+  display: block;
+}
+
 /* Segment boundary editor — line hover tooltip */
 .boundary-line {
   position: relative;

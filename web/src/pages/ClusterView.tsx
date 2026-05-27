@@ -552,6 +552,7 @@ export default function ClusterView() {
                   ) ?? -1) + 1
                 : null;
               const label = subIdx ? `${parentIdx}(${subIdx})` : `${parentIdx}`;
+              const summary = active.tags.length > 5 ? active.tags[5] : null;
               return (
                 <div
                   style={{
@@ -563,7 +564,9 @@ export default function ClusterView() {
                     border: `1px solid ${selectedSub ? "#c4b5fd" : "#ddd6fe"}`,
                     borderRadius: 9999,
                     flexShrink: 0,
+                    position: "relative",
                   }}
+                  className="cluster-strip"
                 >
                   <span
                     style={{
@@ -578,6 +581,9 @@ export default function ClusterView() {
                   <span style={{ fontSize: "0.72rem", color: "#374151" }}>
                     {active.tags.slice(0, 5).join(" · ")}
                   </span>
+                  {summary && (
+                    <span className="cluster-summary-tooltip">{summary}</span>
+                  )}
                 </div>
               );
             })()}

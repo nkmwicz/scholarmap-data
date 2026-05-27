@@ -26,6 +26,10 @@ class ClusterGeminiModel(BaseModel):
     label5: str
 
 
+class ClusterGeminiModelWithSummary(ClusterGeminiModel):
+    summary: str
+
+
 class LetterSummary(BaseModel):
     """V1 — kept for backward compatibility with existing JSONB records."""
 
@@ -111,8 +115,10 @@ Your goal is to identify the commonalities between all provided samples that tie
 
 TASK:
 Examine the provided samples. Identify 5 labels (CamelCase, max 3 words) that define the subcluster as a distincty entity within the parent cluster. 
-What commonalities across all the samples make these specific documents distinct from the broader parent cluster? Why were these documents grouped together at the sub-cluster level, and what specific topical glue ties them together?
-Make sure the labels reflect all samples. These samples are representative of a broader sub-cluster, so the labels should not be specific to one or two documents, but all of them.
+
+Step 1: Provide a short paragraph summarizing the common themes across the samples. Identify the 'semantic glue'—the shared motifs, social registers, specific historical concerns, people, places, or events—that defines this group. Make sure not to summarize each sample individually, but to synthesize the commonalities across all of them that led to their grouping in the same cluster. What commonalities across all the samples make these specific documents distinct from the broader parent cluster? Why were these documents grouped together at the sub-cluster level, and what specific topical glue ties them together?
+
+Step 2: After summarizing the common threads/themes holding the samples together, use that summary to return 5 labels that capture the 'semantic glue' that defines this group from its summary. Each label should strive to be one word or three words at maximum (use CamelCase), and should capture a distinct aspect of the sub-cluster's identity that crosses all samples.
 
 STRICT NEGATIVE CONSTRAINTS:
 1. DO NOT REPEAT PARENT LABELS: If the parent is 'Diplomacy', the sub-label must be more granular.
@@ -120,7 +126,7 @@ STRICT NEGATIVE CONSTRAINTS:
 3. IGNORE BOILERPLATE: 16th-century letters follow formal models. Ignore the 'Your Humble Servant' and 'Most Christian King' noise. Look for the 'News' in the middle.
 4. Do not become overly fixated on specific names that only occur in one or two samples. The labels should reflect the commonalities across all samples, not just one or two outliers.
 
-GUIDELINES FOR LABELS:
+GUIDELINES FOR SUMMARY AND LABELS:
 1. FIND THE PATTERNS: What specific concerns, people, geography or places, events, or topics hold these samples together?
 2. DIFFERENTIATE: Each of the 5 labels should capture a distinct angle (Subject, Tone, Actors, or Context).
 3. SOCIAL REGISTER: What is the nature of the power dynamic? 
@@ -131,9 +137,13 @@ SAMPLES:
             """
         else:
             prompt = f"""
-Examine theserepresentative samples from a specific cluster. Return 5 labels that capture the 'semantic glue' that defines this group.
+Examine these representative samples from a specific cluster. 
 
-Identify the 'semantic glue'—the shared motifs, social registers, or specific historical concerns—that defines this group. Each label should strive to be one word or three words at maximum (use CamelCase), and should capture a distinct aspect of the sub-cluster's identity that crosses all samples.
+Step 1: Provide a short paragraph summarizing the common themes across the samples. Identify the 'semantic glue'—the shared motifs, social registers, specific historical concerns, people, places, or events—that defines this group. Make sure not to summarize each sample individually, but to synthesize the commonalities across all of them that led to their grouping in the same cluster.
+
+Step 2: After summarizing the common threads/themes holding the samples together, use that summary to return 5 labels that capture the 'semantic glue' that defines this group from its summary. Each label should strive to be one word or three words at maximum (use CamelCase), and should capture a distinct aspect of the sub-cluster's identity that crosses all samples.
+
+
 
 GUIDELINES FOR LABELS:
 - **Avoid Anachronism:** Use period-appropriate terminology (e.g., 'Natural Philosophy' instead of 'Science').
@@ -160,15 +170,18 @@ SAMPLES:
                 chat_response = client.chat.parse(
                     model=MODEL_ID,
                     messages=messages,
-                    response_format=ClusterGeminiModel,
+                    response_format=ClusterGeminiModelWithSummary,
                 )
-                tags: ClusterGeminiModel = chat_response.choices[0].message.parsed
+                tags: ClusterGeminiModelWithSummary = chat_response.choices[
+                    0
+                ].message.parsed
                 tags_list = [
                     tags.label1,
                     tags.label2,
                     tags.label3,
                     tags.label4,
                     tags.label5,
+                    tags.summary,
                 ]
                 cluster_response.append(
                     ClusterWithTags(label=cluster.label, tags=tags_list)
