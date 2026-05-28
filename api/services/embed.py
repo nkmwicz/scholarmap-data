@@ -30,6 +30,44 @@ def _chunk_text(text: str, max_words: int) -> list[str]:
     return splitter.split_text(text)
 
 
+def _pages_for_chunk(
+    chunk_text: str,
+    seg_markdown: str,
+    seg_page_range: list[int],
+    page_char_offsets: dict,
+    search_start: int,
+) -> tuple[list[int], int]:
+    """
+    Find which pages a chunk spans using character offsets stored at segment creation.
+    Returns (page_range_for_chunk, next_search_start).
+    """
+    pos = seg_markdown.find(chunk_text, search_start)
+    if pos == -1:
+        return seg_page_range, search_start
+
+    chunk_start = pos
+    chunk_end = pos + len(chunk_text)
+
+    # Build sorted list of (char_start, page_index)
+    sorted_pages = sorted(
+        (int(char_start), int(page_idx))
+        for page_idx, char_start in page_char_offsets.items()
+    )
+    total_len = len(seg_markdown)
+
+    covered: list[int] = []
+    for i, (pchar_start, page_idx) in enumerate(sorted_pages):
+        pchar_end = sorted_pages[i + 1][0] if i + 1 < len(sorted_pages) else total_len
+        if pchar_start < chunk_end and pchar_end > chunk_start:
+            covered.append(page_idx)
+
+    # Preserve original page order
+    page_order = {p: i for i, p in enumerate(seg_page_range)}
+    covered.sort(key=lambda p: page_order.get(p, 9999))
+
+    return covered or seg_page_range, pos + 1
+
+
 async def embed_book(book_id: uuid.UUID, db: AsyncSession) -> int:
     """
     Chunk and embed all segments for a book.
@@ -67,14 +105,28 @@ async def embed_book(book_id: uuid.UUID, db: AsyncSession) -> int:
         chunks = _chunk_text(seg.markdown, max_words)
         seg_total_words = _word_len(seg.markdown)
         n_pages = len(seg.page_range) if seg.page_range else 0
+        has_offsets = bool(seg.page_char_offsets)
+        search_start = 0
         for idx, chunk_text in enumerate(chunks):
             wlen = _word_len(chunk_text)
-            if seg_total_words > 0 and n_pages > 0:
-                word_start = max(0, idx * step - CHUNK_OVERLAP)
-                word_end = min(word_start + wlen, seg_total_words)
-                ps = min(int(word_start / seg_total_words * n_pages), n_pages - 1)
-                pe = min(int(word_end / seg_total_words * n_pages), n_pages - 1)
-                chunk_page_range = seg.page_range[ps : pe + 1] or seg.page_range
+            if n_pages > 0:
+                if has_offsets:
+                    chunk_page_range, search_start = _pages_for_chunk(
+                        chunk_text,
+                        seg.markdown,
+                        seg.page_range,
+                        seg.page_char_offsets,
+                        search_start,
+                    )
+                elif seg_total_words > 0:
+                    # Fallback: ratio estimation (for segments confirmed before migration)
+                    word_start = max(0, idx * step - CHUNK_OVERLAP)
+                    word_end = min(word_start + wlen, seg_total_words)
+                    ps = min(int(word_start / seg_total_words * n_pages), n_pages - 1)
+                    pe = min(int(word_end / seg_total_words * n_pages), n_pages - 1)
+                    chunk_page_range = seg.page_range[ps : pe + 1] or seg.page_range
+                else:
+                    chunk_page_range = seg.page_range
             else:
                 chunk_page_range = seg.page_range or []
             sc = SegmentChunk(

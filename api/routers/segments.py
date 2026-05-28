@@ -14,7 +14,12 @@ from api.models import (
     ExcludedLine,
     SegmentChunk,
 )
-from api.services.boundary import BoundaryIn, save_boundaries, confirm_segments
+from api.services.boundary import (
+    BoundaryIn,
+    save_boundaries,
+    confirm_segments,
+    backfill_segment_offsets,
+)
 
 router = APIRouter()
 
@@ -146,6 +151,19 @@ async def confirm_segments_endpoint(
 
     background_tasks.add_task(confirm_segments, book_id, db)
     return {"status": "assembling_segments"}
+
+
+@router.post("/{book_id}/segments/backfill-offsets")
+async def backfill_offsets_endpoint(
+    book_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(Book).where(Book.id == book_id))
+    book = result.scalar_one_or_none()
+    if not book:
+        raise HTTPException(404, "Book not found")
+    updated = await backfill_segment_offsets(book_id, db)
+    return {"updated": updated}
 
 
 @router.get("/{book_id}/segments", response_model=list[SegmentOut])

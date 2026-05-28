@@ -135,6 +135,7 @@ export interface Segment {
   title: string;
   markdown: string;
   page_range: number[];
+  page_char_offsets?: Record<string, number> | null;
   document_type: DocumentType;
   cluster_labels?: ClusterLabel[];
   ai_summary: LetterSummary | LetterSummaryV2 | ChapterSummary | null;
@@ -266,6 +267,13 @@ export const api = {
     chunks: (bookId: string, segmentId: string) =>
       request<SegmentChunkWithLabels[]>(
         `/books/${bookId}/segments/${segmentId}/chunks`,
+      ),
+    backfillOffsets: (bookId: string) =>
+      request<{ updated: number }>(
+        `/books/${bookId}/segments/backfill-offsets`,
+        {
+          method: "POST",
+        },
       ),
   },
 

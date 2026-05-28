@@ -139,6 +139,7 @@ class Segment(Base):
     ai_summary: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     neo4j_entered: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     unimportant: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    page_char_offsets: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
     book: Mapped["Book"] = relationship("Book", back_populates="segments")
     chunks: Mapped[list["SegmentChunk"]] = relationship(

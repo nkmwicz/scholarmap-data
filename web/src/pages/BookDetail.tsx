@@ -12,6 +12,8 @@ export default function BookDetail() {
   const [ocrMessage, setOcrMessage] = useState<string | null>(null);
   const [showReembedConfirm, setShowReembedConfirm] = useState(false);
   const [boundaryCount, setBoundaryCount] = useState<number | null>(null);
+  const [needsBackfill, setNeedsBackfill] = useState(false);
+  const [backfilling, setBackfilling] = useState(false);
   const [embedStats, setEmbedStats] = useState<{
     segment_count: number;
     chunk_count: number;
@@ -59,6 +61,11 @@ export default function BookDetail() {
     api.embed
       .stats(bookId)
       .then(setEmbedStats)
+      .catch(() => {});
+    // Check if any segments are missing page_char_offsets
+    api.segments
+      .list(bookId)
+      .then((segs) => setNeedsBackfill(segs.some((s) => !s.page_char_offsets)))
       .catch(() => {});
   }, [bookId, book?.status]);
 
@@ -264,6 +271,30 @@ export default function BookDetail() {
             >
               Open Boundary Editor
             </button>
+            {needsBackfill && (
+              <button
+                className="btn btn-secondary"
+                disabled={backfilling}
+                onClick={async () => {
+                  setBackfilling(true);
+                  try {
+                    const result = await api.segments.backfillOffsets(bookId!);
+                    setNeedsBackfill(false);
+                    setError("");
+                    // surface result briefly via error slot (green would need separate state)
+                    if (result.updated === 0) {
+                      // already up to date, just hide
+                    }
+                  } catch (e: any) {
+                    setError(e.message);
+                  } finally {
+                    setBackfilling(false);
+                  }
+                }}
+              >
+                {backfilling ? "Backfilling…" : "Backfill Page Offsets"}
+              </button>
+            )}
             <button
               className="btn btn-secondary"
               disabled={!ocrDone || downloading}

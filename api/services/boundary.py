@@ -155,6 +155,17 @@ async def confirm_segments(book_id: uuid.UUID, db: AsyncSession) -> int:
                 page_range.append(pi)
 
         markdown = "\n\n".join(text_parts)
+
+        # Build page_char_offsets: maps each page_index → its char start in markdown.
+        # text_parts[i] corresponds to page_range[i]; parts are joined with "\n\n".
+        page_char_offsets: dict[str, int] = {}
+        offset = 0
+        for i, part in enumerate(text_parts):
+            page_char_offsets[str(page_range[i])] = offset
+            offset += len(part)
+            if i < len(text_parts) - 1:
+                offset += 2  # "\n\n" separator
+
         segments.append(
             Segment(
                 book_id=book_id,
@@ -162,6 +173,7 @@ async def confirm_segments(book_id: uuid.UUID, db: AsyncSession) -> int:
                 title=boundary.segment_title,
                 markdown=markdown,
                 page_range=page_range,
+                page_char_offsets=page_char_offsets,
                 document_type=book.document_type,
             )
         )
@@ -171,3 +183,110 @@ async def confirm_segments(book_id: uuid.UUID, db: AsyncSession) -> int:
     await db.commit()
 
     return len(segments)
+
+
+async def backfill_segment_offsets(book_id: uuid.UUID, db: AsyncSession) -> int:
+    """
+    Replay the page-assembly logic to compute and store page_char_offsets for all
+    existing segments of a book that are missing it.  Does NOT recreate segments.
+    Returns the number of segments updated.
+    """
+    excl_result = await db.execute(
+        select(ExcludedPage.page_index).where(ExcludedPage.book_id == book_id)
+    )
+    excluded = set(excl_result.scalars().all())
+
+    excl_lines_result = await db.execute(
+        select(ExcludedLine.page_index, ExcludedLine.line_index).where(
+            ExcludedLine.book_id == book_id
+        )
+    )
+    excluded_lines: set[tuple[int, int]] = set(excl_lines_result.all())
+
+    pages_result = await db.execute(
+        select(OcrPage).where(OcrPage.book_id == book_id).order_by(OcrPage.page_index)
+    )
+    pages: list[OcrPage] = list(pages_result.scalars().all())
+    page_map = {p.page_index: p for p in pages}
+
+    bounds_result = await db.execute(
+        select(SegmentBoundary)
+        .where(SegmentBoundary.book_id == book_id)
+        .order_by(SegmentBoundary.page_index, SegmentBoundary.line_index)
+    )
+    boundaries: list[SegmentBoundary] = list(bounds_result.scalars().all())
+
+    if not boundaries:
+        return 0
+
+    segs_result = await db.execute(
+        select(Segment)
+        .where(Segment.book_id == book_id)
+        .order_by(Segment.segment_index)
+    )
+    existing_segments: list[Segment] = list(segs_result.scalars().all())
+    seg_by_index = {s.segment_index: s for s in existing_segments}
+
+    all_page_indices = sorted(
+        p.page_index for p in pages if p.page_index not in excluded
+    )
+
+    def _filtered_join(lines: list[str], pi: int, start: int, end: int) -> str:
+        return "\n".join(
+            lines[li] for li in range(start, end) if (pi, li) not in excluded_lines
+        )
+
+    updated = 0
+    for i, boundary in enumerate(boundaries):
+        seg = seg_by_index.get(i)
+        if seg is None or seg.page_char_offsets is not None:
+            continue  # skip if already has offsets
+
+        start_page = boundary.page_index
+        start_line = boundary.line_index
+
+        if i + 1 < len(boundaries):
+            end_page = boundaries[i + 1].page_index
+            end_line = boundaries[i + 1].line_index
+        else:
+            end_page = all_page_indices[-1] if all_page_indices else start_page
+            end_line = None
+
+        text_parts: list[str] = []
+        page_range: list[int] = []
+
+        for pi in all_page_indices:
+            if pi < start_page or pi > end_page:
+                continue
+            page = page_map.get(pi)
+            if page is None:
+                continue
+            page_lines = page.lines
+
+            if pi == start_page and pi == end_page:
+                slice_end = end_line if end_line is not None else len(page_lines)
+                chunk = _filtered_join(page_lines, pi, start_line, slice_end)
+            elif pi == start_page:
+                chunk = _filtered_join(page_lines, pi, start_line, len(page_lines))
+            elif pi == end_page and end_line is not None:
+                chunk = _filtered_join(page_lines, pi, 0, end_line)
+            else:
+                chunk = _filtered_join(page_lines, pi, 0, len(page_lines))
+
+            if chunk.strip():
+                text_parts.append(chunk)
+                page_range.append(pi)
+
+        page_char_offsets: dict[str, int] = {}
+        offset = 0
+        for j, part in enumerate(text_parts):
+            page_char_offsets[str(page_range[j])] = offset
+            offset += len(part)
+            if j < len(text_parts) - 1:
+                offset += 2  # "\n\n" separator
+
+        seg.page_char_offsets = page_char_offsets
+        updated += 1
+
+    await db.commit()
+    return updated
