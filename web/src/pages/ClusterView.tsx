@@ -12,6 +12,7 @@ import {
 import { PanZoom } from "../components/PanZoom";
 import { SegmentSummaryPanel } from "../components/SegmentSummaryPanel";
 import { Neo4jToggleButton } from "../components/Neo4jToggleButton";
+import { UnimportantToggleButton } from "../components/UnimportantToggleButton";
 import { ChunkMap, ChunkedSegmentText } from "../components/ChunkMap";
 
 const col: React.CSSProperties = {
@@ -216,6 +217,17 @@ export default function ClusterView() {
     );
     setSummaryPinned(false);
     fetchSegments(sub.id);
+  };
+
+  // Update a single chunk's flags in the segmentChunks list
+  const handleChunkPatch = (
+    chunkId: string,
+    field: "neo4j_entered" | "unimportant",
+    value: boolean,
+  ) => {
+    setSegmentChunks((prev) =>
+      prev.map((c) => (c.chunk_id === chunkId ? { ...c, [field]: value } : c)),
+    );
   };
 
   return (
@@ -787,9 +799,38 @@ export default function ClusterView() {
                                 fontSize: "0.78rem",
                                 color: "#111827",
                                 marginBottom: "0.1rem",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "0.3rem",
                               }}
                             >
-                              {chunk.segment_title}
+                              <span style={{ flex: 1 }}>
+                                {chunk.segment_title}
+                              </span>
+                              {chunk.neo4j_entered && (
+                                <span
+                                  title="In Neo4j"
+                                  style={{
+                                    fontSize: "0.65rem",
+                                    color: "#16a34a",
+                                    lineHeight: 1,
+                                  }}
+                                >
+                                  ✓
+                                </span>
+                              )}
+                              {chunk.unimportant && (
+                                <span
+                                  title="Unimportant"
+                                  style={{
+                                    fontSize: "0.65rem",
+                                    color: "#dc2626",
+                                    lineHeight: 1,
+                                  }}
+                                >
+                                  ✗
+                                </span>
+                              )}
                             </div>
                             <div
                               style={{ fontSize: "0.68rem", color: "#9ca3af" }}
@@ -851,6 +892,19 @@ export default function ClusterView() {
                                   }}
                                 >
                                   ✓
+                                </span>
+                              )}
+                              {seg.unimportant && (
+                                <span
+                                  title="Unimportant"
+                                  style={{
+                                    fontSize: "0.65rem",
+                                    color: "#dc2626",
+                                    flexShrink: 0,
+                                    lineHeight: 1,
+                                  }}
+                                >
+                                  ✗
                                 </span>
                               )}
                             </div>
@@ -945,45 +999,174 @@ export default function ClusterView() {
                             : " · pp. ?"}
                         </span>
                       </div>
-                      {/* Text | Images | Summary ribbon */}
+                      {/* Chunk flag toggles + view ribbon */}
                       <div
                         style={{
                           display: "flex",
-                          border: "1px solid #e5e7eb",
-                          borderRadius: 6,
-                          overflow: "hidden",
+                          alignItems: "center",
+                          gap: "0.4rem",
                           flexShrink: 0,
+                          flexWrap: "wrap",
+                          justifyContent: "flex-end",
                         }}
                       >
-                        {(book?.gallica_url &&
-                        selectedChunk.page_range.length > 0
-                          ? (["text", "images", "summary"] as const)
-                          : (["text", "summary"] as const)
-                        ).map((mode) => (
-                          <button
-                            key={mode}
-                            onClick={() => setViewMode(mode)}
-                            style={{
-                              padding: "0.2rem 0.65rem",
-                              fontSize: "0.72rem",
-                              fontWeight: 500,
-                              border: "none",
-                              cursor: "pointer",
-                              background:
-                                viewMode === mode ? "#1e40af" : "transparent",
-                              color: viewMode === mode ? "#fff" : "#374151",
-                            }}
-                          >
-                            {mode === "text"
-                              ? "OCR Text"
-                              : mode === "images"
-                                ? "Images"
-                                : "Summary"}
-                          </button>
-                        ))}
+                        {/* Neo4j chunk toggle */}
+                        <button
+                          onClick={async () => {
+                            const newVal = !selectedChunk.neo4j_entered;
+                            try {
+                              await api.chunks.patch(
+                                bookId!,
+                                selectedChunk.chunk_id,
+                                {
+                                  neo4j_entered: newVal,
+                                },
+                              );
+                              const updated = {
+                                ...selectedChunk,
+                                neo4j_entered: newVal,
+                              };
+                              setSelectedChunk(updated);
+                              setChunks((prev) =>
+                                prev.map((c) =>
+                                  c.chunk_id === updated.chunk_id ? updated : c,
+                                ),
+                              );
+                              setSegmentChunks((prev) =>
+                                prev.map((c) =>
+                                  c.chunk_id === updated.chunk_id
+                                    ? { ...c, neo4j_entered: newVal }
+                                    : c,
+                                ),
+                              );
+                            } catch {
+                              // silently ignore
+                            }
+                          }}
+                          title={
+                            selectedChunk.neo4j_entered
+                              ? "Mark chunk as not in Neo4j"
+                              : "Mark chunk as in Neo4j"
+                          }
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.3rem",
+                            padding: "0.2rem 0.6rem",
+                            fontSize: "0.72rem",
+                            fontWeight: selectedChunk.neo4j_entered ? 600 : 400,
+                            border: `1px solid ${selectedChunk.neo4j_entered ? "#059669" : "#e5e7eb"}`,
+                            borderRadius: 6,
+                            background: selectedChunk.neo4j_entered
+                              ? "#ecfdf5"
+                              : "#fff",
+                            color: selectedChunk.neo4j_entered
+                              ? "#059669"
+                              : "#9ca3af",
+                            cursor: "pointer",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {selectedChunk.neo4j_entered ? "✔️" : "◯"} Neo4j
+                        </button>
+                        {/* Unimportant chunk toggle */}
+                        <button
+                          onClick={async () => {
+                            const newVal = !selectedChunk.unimportant;
+                            try {
+                              await api.chunks.patch(
+                                bookId!,
+                                selectedChunk.chunk_id,
+                                {
+                                  unimportant: newVal,
+                                },
+                              );
+                              const updated = {
+                                ...selectedChunk,
+                                unimportant: newVal,
+                              };
+                              setSelectedChunk(updated);
+                              setChunks((prev) =>
+                                prev.map((c) =>
+                                  c.chunk_id === updated.chunk_id ? updated : c,
+                                ),
+                              );
+                              setSegmentChunks((prev) =>
+                                prev.map((c) =>
+                                  c.chunk_id === updated.chunk_id
+                                    ? { ...c, unimportant: newVal }
+                                    : c,
+                                ),
+                              );
+                            } catch {
+                              // silently ignore
+                            }
+                          }}
+                          title={
+                            selectedChunk.unimportant
+                              ? "Mark chunk as important"
+                              : "Mark chunk as unimportant"
+                          }
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.3rem",
+                            padding: "0.2rem 0.6rem",
+                            fontSize: "0.72rem",
+                            fontWeight: selectedChunk.unimportant ? 600 : 400,
+                            border: `1px solid ${selectedChunk.unimportant ? "#dc2626" : "#e5e7eb"}`,
+                            borderRadius: 6,
+                            background: selectedChunk.unimportant
+                              ? "#fef2f2"
+                              : "#fff",
+                            color: selectedChunk.unimportant
+                              ? "#dc2626"
+                              : "#9ca3af",
+                            cursor: "pointer",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {selectedChunk.unimportant ? "✗" : "◯"} Unimp.
+                        </button>
+                        {/* Text | Images | Summary ribbon */}
+                        <div
+                          style={{
+                            display: "flex",
+                            border: "1px solid #e5e7eb",
+                            borderRadius: 6,
+                            overflow: "hidden",
+                            flexShrink: 0,
+                          }}
+                        >
+                          {(book?.gallica_url &&
+                          selectedChunk.page_range.length > 0
+                            ? (["text", "images", "summary"] as const)
+                            : (["text", "summary"] as const)
+                          ).map((mode) => (
+                            <button
+                              key={mode}
+                              onClick={() => setViewMode(mode)}
+                              style={{
+                                padding: "0.2rem 0.65rem",
+                                fontSize: "0.72rem",
+                                fontWeight: 500,
+                                border: "none",
+                                cursor: "pointer",
+                                background:
+                                  viewMode === mode ? "#1e40af" : "transparent",
+                                color: viewMode === mode ? "#fff" : "#374151",
+                              }}
+                            >
+                              {mode === "text"
+                                ? "OCR Text"
+                                : mode === "images"
+                                  ? "Images"
+                                  : "Summary"}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     </div>
-                    {/* Segment chunk map */}
                     <ChunkMap
                       chunks={segmentChunks}
                       clusters={clusters}
@@ -1332,6 +1515,30 @@ export default function ClusterView() {
                               s.id === updated.id ? updated : s,
                             ),
                           );
+                          if (bookId) {
+                            api.segments
+                              .chunks(bookId, updated.id)
+                              .then(setSegmentChunks)
+                              .catch(() => {});
+                          }
+                        }}
+                      />
+                      <UnimportantToggleButton
+                        segment={selectedSegment}
+                        bookId={bookId!}
+                        onUpdate={(updated) => {
+                          setSelectedSegment(updated);
+                          setSegments((prev) =>
+                            prev.map((s) =>
+                              s.id === updated.id ? updated : s,
+                            ),
+                          );
+                          if (bookId) {
+                            api.segments
+                              .chunks(bookId, updated.id)
+                              .then(setSegmentChunks)
+                              .catch(() => {});
+                          }
                         }}
                       />
                       {book?.gallica_url && (
@@ -1535,6 +1742,8 @@ export default function ClusterView() {
                         clusters={clusters}
                         activeParentIndex={activeParentIndex}
                         activeSubIndex={activeSubIndex}
+                        bookId={bookId}
+                        onChunkPatch={handleChunkPatch}
                       />
                     ) : (
                       <div

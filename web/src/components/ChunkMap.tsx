@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { api } from "../api/client";
 import type {
   Cluster,
   ClusterLabel,
@@ -52,6 +53,12 @@ interface ChunkedTextProps {
   activeParentIndex?: number;
   activeSubIndex?: number | null;
   highlightChunkId?: string;
+  bookId?: string;
+  onChunkPatch?: (
+    chunkId: string,
+    field: "neo4j_entered" | "unimportant",
+    value: boolean,
+  ) => void;
 }
 
 export function ChunkedSegmentText({
@@ -60,8 +67,30 @@ export function ChunkedSegmentText({
   activeParentIndex,
   activeSubIndex,
   highlightChunkId,
+  bookId,
+  onChunkPatch,
 }: ChunkedTextProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [togglingChunk, setTogglingChunk] = useState<string | null>(null);
+
+  const handleChunkToggle = async (
+    e: React.MouseEvent,
+    chunk: SegmentChunkWithLabels,
+    field: "neo4j_entered" | "unimportant",
+  ) => {
+    e.stopPropagation();
+    if (!bookId || !onChunkPatch) return;
+    setTogglingChunk(chunk.chunk_id + field);
+    try {
+      const newVal = !chunk[field];
+      await api.chunks.patch(bookId, chunk.chunk_id, { [field]: newVal });
+      onChunkPatch(chunk.chunk_id, field, newVal);
+    } catch {
+      // silently ignore
+    } finally {
+      setTogglingChunk(null);
+    }
+  };
 
   const clusterByIndex = new Map<number, Cluster>();
   for (const c of clusters) {
@@ -147,36 +176,104 @@ export function ChunkedSegmentText({
               transition: "background 0.15s",
             }}
           >
-            {/* Cluster badge — top right (hidden for non-matched chunks in search mode) */}
-            {chunk.cluster_labels.length > 0 &&
-              !(highlightChunkId !== undefined && !isHighlighted) && (
-                <span
+            {/* Top-right badge row: flags + cluster badge */}
+            <div
+              style={{
+                float: "right",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.3rem",
+                marginLeft: "0.6rem",
+                marginBottom: "0.15rem",
+              }}
+            >
+              {/* Neo4j chunk toggle (only when bookId+onChunkPatch provided) */}
+              {bookId && onChunkPatch && (
+                <button
+                  onClick={(e) => handleChunkToggle(e, chunk, "neo4j_entered")}
+                  disabled={togglingChunk === chunk.chunk_id + "neo4j_entered"}
+                  title={
+                    chunk.neo4j_entered
+                      ? "Mark chunk as not in Neo4j"
+                      : "Mark chunk as in Neo4j"
+                  }
                   style={{
-                    float: "right",
-                    marginLeft: "0.6rem",
-                    marginBottom: "0.15rem",
-                    fontSize: "0.62rem",
-                    fontWeight: 700,
-                    fontFamily: "monospace",
-                    background: color.bg,
-                    color: color.text,
-                    border: `1px solid ${color.border}`,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.2rem",
                     padding: "0.05rem 0.35rem",
+                    fontSize: "0.62rem",
+                    fontWeight: chunk.neo4j_entered ? 600 : 400,
+                    border: `1px solid ${chunk.neo4j_entered ? "#059669" : "#e5e7eb"}`,
                     borderRadius: 4,
+                    background: chunk.neo4j_entered ? "#ecfdf5" : "#f9fafb",
+                    color: chunk.neo4j_entered ? "#059669" : "#9ca3af",
+                    cursor: "pointer",
                     whiteSpace: "nowrap",
+                    lineHeight: 1,
                   }}
                 >
-                  {labelStr}
-                </span>
+                  {chunk.neo4j_entered ? "✔️" : "◯"} Neo4j
+                </button>
               )}
+              {/* Unimportant chunk toggle */}
+              {bookId && onChunkPatch && (
+                <button
+                  onClick={(e) => handleChunkToggle(e, chunk, "unimportant")}
+                  disabled={togglingChunk === chunk.chunk_id + "unimportant"}
+                  title={
+                    chunk.unimportant
+                      ? "Mark chunk as important"
+                      : "Mark chunk as unimportant"
+                  }
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.2rem",
+                    padding: "0.05rem 0.35rem",
+                    fontSize: "0.62rem",
+                    fontWeight: chunk.unimportant ? 600 : 400,
+                    border: `1px solid ${chunk.unimportant ? "#dc2626" : "#e5e7eb"}`,
+                    borderRadius: 4,
+                    background: chunk.unimportant ? "#fef2f2" : "#f9fafb",
+                    color: chunk.unimportant ? "#dc2626" : "#9ca3af",
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                    lineHeight: 1,
+                  }}
+                >
+                  {chunk.unimportant ? "✗" : "◯"} Unimp.
+                </button>
+              )}
+              {/* Cluster badge */}
+              {chunk.cluster_labels.length > 0 &&
+                !(highlightChunkId !== undefined && !isHighlighted) && (
+                  <span
+                    style={{
+                      fontSize: "0.62rem",
+                      fontWeight: 700,
+                      fontFamily: "monospace",
+                      background: color.bg,
+                      color: color.text,
+                      border: `1px solid ${color.border}`,
+                      padding: "0.05rem 0.35rem",
+                      borderRadius: 4,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {labelStr}
+                  </span>
+                )}
+            </div>
             <p
               style={{
                 margin: 0,
                 fontFamily: "Georgia, serif",
                 fontSize: "0.9rem",
                 lineHeight: 1.8,
-                color: "#1f2937",
+                color: chunk.unimportant ? "#9ca3af" : "#1f2937",
                 whiteSpace: "pre-wrap",
+                textDecoration: chunk.unimportant ? "line-through" : undefined,
               }}
             >
               {chunk.text}
@@ -325,13 +422,28 @@ export function ChunkMap({
               onMouseEnter={(e) => showPopover(e, i)}
               onClick={() => onChunkClick?.(chunk)}
               style={{
+                position: "relative",
                 padding: "0.15rem 0.45rem",
                 borderRadius: 5,
                 fontSize: "0.68rem",
                 fontWeight: isHighlighted ? 700 : 500,
-                background: isHovered ? color.border : color.bg,
-                border: `1px solid ${isChunkActive(chunk.cluster_labels, activeParentIndex, activeSubIndex) ? color.border : "#e5e7eb"}`,
-                color: color.text,
+                background: chunk.unimportant
+                  ? "#fef2f2"
+                  : isHovered
+                    ? color.border
+                    : color.bg,
+                border: `1px solid ${
+                  chunk.unimportant
+                    ? "#fca5a5"
+                    : isChunkActive(
+                          chunk.cluster_labels,
+                          activeParentIndex,
+                          activeSubIndex,
+                        )
+                      ? color.border
+                      : "#e5e7eb"
+                }`,
+                color: chunk.unimportant ? "#dc2626" : color.text,
                 cursor: onChunkClick ? "pointer" : "default",
                 outline: isHighlighted ? `2px solid ${color.text}` : undefined,
                 outlineOffset: isHighlighted ? "1px" : undefined,
@@ -339,6 +451,50 @@ export function ChunkMap({
               }}
             >
               {chunk.chunk_index + 1}
+              {chunk.neo4j_entered && (
+                <span
+                  style={{
+                    position: "absolute",
+                    top: -4,
+                    right: -4,
+                    fontSize: "0.5rem",
+                    fontWeight: 700,
+                    background: "#059669",
+                    color: "#fff",
+                    borderRadius: "50%",
+                    width: 10,
+                    height: 10,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    lineHeight: 1,
+                  }}
+                >
+                  N
+                </span>
+              )}
+              {chunk.unimportant && (
+                <span
+                  style={{
+                    position: "absolute",
+                    top: -4,
+                    left: -4,
+                    fontSize: "0.5rem",
+                    fontWeight: 700,
+                    background: "#dc2626",
+                    color: "#fff",
+                    borderRadius: "50%",
+                    width: 10,
+                    height: 10,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    lineHeight: 1,
+                  }}
+                >
+                  ✗
+                </span>
+              )}
             </div>
           );
         })}

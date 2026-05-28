@@ -138,6 +138,7 @@ class Segment(Base):
     document_type: Mapped[str] = mapped_column(String, nullable=False)
     ai_summary: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     neo4j_entered: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    unimportant: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     book: Mapped["Book"] = relationship("Book", back_populates="segments")
     chunks: Mapped[list["SegmentChunk"]] = relationship(
@@ -165,6 +166,8 @@ class SegmentChunk(Base):
         ARRAY(Integer), nullable=False, default=list
     )
     ai_summary: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    neo4j_entered: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    unimportant: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     segment: Mapped["Segment"] = relationship("Segment", back_populates="chunks")
     memberships: Mapped[list["ClusterMembership"]] = relationship(

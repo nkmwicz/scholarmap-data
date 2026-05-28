@@ -2,11 +2,18 @@ import asyncio
 import uuid
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.db import get_db
-from api.models import Book, Segment, SegmentBoundary, ExcludedPage, ExcludedLine
+from api.models import (
+    Book,
+    Segment,
+    SegmentBoundary,
+    ExcludedPage,
+    ExcludedLine,
+    SegmentChunk,
+)
 from api.services.boundary import BoundaryIn, save_boundaries, confirm_segments
 
 router = APIRouter()
@@ -48,6 +55,7 @@ class SegmentOut(BaseModel):
     document_type: str
     ai_summary: dict | None = None
     neo4j_entered: bool = False
+    unimportant: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -204,6 +212,7 @@ async def generate_summary(
 
 class SegmentPatch(BaseModel):
     neo4j_entered: bool | None = None
+    unimportant: bool | None = None
 
 
 @router.patch("/{book_id}/segments/{segment_id}", response_model=SegmentOut)
@@ -222,6 +231,19 @@ async def patch_segment(
 
     if payload.neo4j_entered is not None:
         seg.neo4j_entered = payload.neo4j_entered
+        await db.execute(
+            update(SegmentChunk)
+            .where(SegmentChunk.segment_id == segment_id)
+            .values(neo4j_entered=payload.neo4j_entered)
+        )
+
+    if payload.unimportant is not None:
+        seg.unimportant = payload.unimportant
+        await db.execute(
+            update(SegmentChunk)
+            .where(SegmentChunk.segment_id == segment_id)
+            .values(unimportant=payload.unimportant)
+        )
 
     await db.commit()
     await db.refresh(seg)

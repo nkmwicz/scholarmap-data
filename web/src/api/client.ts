@@ -125,6 +125,8 @@ export interface ClusterChunk {
   segment_title: string;
   page_range: number[];
   ai_summary: ChapterSummary | null;
+  neo4j_entered: boolean;
+  unimportant: boolean;
 }
 
 export interface Segment {
@@ -137,6 +139,7 @@ export interface Segment {
   cluster_labels?: ClusterLabel[];
   ai_summary: LetterSummary | LetterSummaryV2 | ChapterSummary | null;
   neo4j_entered: boolean;
+  unimportant: boolean;
 }
 
 export interface SegmentChunkWithLabels {
@@ -145,6 +148,8 @@ export interface SegmentChunkWithLabels {
   text: string;
   page_range: number[];
   cluster_labels: ClusterLabel[];
+  neo4j_entered: boolean;
+  unimportant: boolean;
 }
 
 export interface RepresentativeSample {
@@ -252,7 +257,7 @@ export const api = {
     patch: (
       bookId: string,
       segmentId: string,
-      data: { neo4j_entered?: boolean },
+      data: { neo4j_entered?: boolean; unimportant?: boolean },
     ) =>
       request<Segment>(`/books/${bookId}/segments/${segmentId}`, {
         method: "PATCH",
@@ -301,5 +306,18 @@ export const api = {
         `/books/${bookId}/chunks/${chunkId}/summary?force=${force}`,
         { method: "POST" },
       ),
+    patch: (
+      bookId: string,
+      chunkId: string,
+      data: { neo4j_entered?: boolean; unimportant?: boolean },
+    ) =>
+      request<{
+        chunk_id: string;
+        neo4j_entered: boolean;
+        unimportant: boolean;
+      }>(`/books/${bookId}/chunks/${chunkId}`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      }),
   },
 };

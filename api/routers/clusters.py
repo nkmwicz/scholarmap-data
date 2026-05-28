@@ -63,6 +63,8 @@ class ClusterChunkOut(BaseModel):
     segment_title: str
     page_range: list[int]
     ai_summary: dict | None = None
+    neo4j_entered: bool = False
+    unimportant: bool = False
 
 
 def _derive_segment_title(seg: Segment) -> str:
@@ -258,6 +260,8 @@ async def get_cluster_chunks(
             segment_title=_derive_segment_title(seg),
             page_range=chunk.page_range or [],
             ai_summary=chunk.ai_summary,
+            neo4j_entered=chunk.neo4j_entered,
+            unimportant=chunk.unimportant,
         )
         for chunk, seg in rows
     ]
@@ -269,6 +273,8 @@ class SegmentChunkWithLabels(BaseModel):
     text: str
     page_range: list[int]
     cluster_labels: list[ClusterLabel]
+    neo4j_entered: bool = False
+    unimportant: bool = False
 
 
 @router.get(
@@ -358,6 +364,8 @@ async def get_segment_chunks_with_labels(
                 text=chunk.text,
                 page_range=chunk.page_range or [],
                 cluster_labels=labels,
+                neo4j_entered=chunk.neo4j_entered,
+                unimportant=chunk.unimportant,
             )
         )
     return out

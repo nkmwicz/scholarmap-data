@@ -17,6 +17,49 @@ class ChunkSummaryOut(BaseModel):
     ai_summary: dict | None = None
 
 
+class ChunkPatch(BaseModel):
+    neo4j_entered: bool | None = None
+    unimportant: bool | None = None
+
+
+class ChunkOut(BaseModel):
+    chunk_id: uuid.UUID
+    neo4j_entered: bool = False
+    unimportant: bool = False
+
+    model_config = {"from_attributes": True}
+
+
+@router.patch("/{book_id}/chunks/{chunk_id}", response_model=ChunkOut)
+async def patch_chunk(
+    book_id: uuid.UUID,
+    chunk_id: uuid.UUID,
+    payload: ChunkPatch,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(SegmentChunk)
+        .join(Segment, Segment.id == SegmentChunk.segment_id)
+        .where(SegmentChunk.id == chunk_id, Segment.book_id == book_id)
+    )
+    chunk = result.scalar_one_or_none()
+    if chunk is None:
+        raise HTTPException(status_code=404, detail="Chunk not found")
+
+    if payload.neo4j_entered is not None:
+        chunk.neo4j_entered = payload.neo4j_entered
+    if payload.unimportant is not None:
+        chunk.unimportant = payload.unimportant
+
+    await db.commit()
+    await db.refresh(chunk)
+    return ChunkOut(
+        chunk_id=chunk.id,
+        neo4j_entered=chunk.neo4j_entered,
+        unimportant=chunk.unimportant,
+    )
+
+
 @router.post("/{book_id}/chunks/{chunk_id}/summary", response_model=ChunkSummaryOut)
 async def generate_chunk_summary(
     book_id: uuid.UUID,
