@@ -10,7 +10,7 @@ function App() {
     <BrowserRouter>
       <nav className="nav">
         <NavLink to="/" end className="nav-brand">
-          Scholarmap
+          ScholarData
         </NavLink>
       </nav>
       <main className="main">
