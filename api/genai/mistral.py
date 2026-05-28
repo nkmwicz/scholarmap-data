@@ -26,12 +26,45 @@ class ClusterGeminiModel(BaseModel):
     label5: str
 
 
+class ClusterGeminiModelWithSummary(ClusterGeminiModel):
+    summary: str
+
+
 class LetterSummary(BaseModel):
+    """V1 — kept for backward compatibility with existing JSONB records."""
+
     author: str
     author_location: str
     recipient_location: str
     recipient: str
     date: str
+    summary: str
+    people_referenced: list[str]
+    places_referenced: list[str]
+    events_referenced: list[str]
+
+
+class NoteExtract(BaseModel):
+    summary: str
+    people_referenced: list[str]
+    places_referenced: list[str]
+    events_referenced: list[str]
+
+
+class LetterSummaryV2(BaseModel):
+    """V2 — hierarchical: letter metadata + sequential discrete-matter notes."""
+
+    version: int = 2
+    author: str
+    author_location: str
+    recipient_location: str
+    recipient: str
+    date: str
+    summary: str
+    notes: list[NoteExtract]
+
+
+class ChapterSummary(BaseModel):
     summary: str
     people_referenced: list[str]
     places_referenced: list[str]
@@ -82,8 +115,10 @@ Your goal is to identify the commonalities between all provided samples that tie
 
 TASK:
 Examine the provided samples. Identify 5 labels (CamelCase, max 3 words) that define the subcluster as a distincty entity within the parent cluster. 
-What commonalities across all the samples make these specific documents distinct from the broader parent cluster? Why were these documents grouped together at the sub-cluster level, and what specific topical glue ties them together?
-Make sure the labels reflect all samples. These samples are representative of a broader sub-cluster, so the labels should not be specific to one or two documents, but all of them.
+
+Step 1: Provide a short paragraph summarizing the common themes across the samples. Identify the 'semantic glue'—the shared motifs, social registers, specific historical concerns, people, places, or events—that defines this group. Make sure not to summarize each sample individually, but to synthesize the commonalities across all of them that led to their grouping in the same cluster. What commonalities across all the samples make these specific documents distinct from the broader parent cluster? Why were these documents grouped together at the sub-cluster level, and what specific topical glue ties them together?
+
+Step 2: After summarizing the common threads/themes holding the samples together, use that summary to return 5 labels that capture the 'semantic glue' that defines this group from its summary. Each label should strive to be one word or three words at maximum (use CamelCase), and should capture a distinct aspect of the sub-cluster's identity that crosses all samples.
 
 STRICT NEGATIVE CONSTRAINTS:
 1. DO NOT REPEAT PARENT LABELS: If the parent is 'Diplomacy', the sub-label must be more granular.
@@ -91,7 +126,7 @@ STRICT NEGATIVE CONSTRAINTS:
 3. IGNORE BOILERPLATE: 16th-century letters follow formal models. Ignore the 'Your Humble Servant' and 'Most Christian King' noise. Look for the 'News' in the middle.
 4. Do not become overly fixated on specific names that only occur in one or two samples. The labels should reflect the commonalities across all samples, not just one or two outliers.
 
-GUIDELINES FOR LABELS:
+GUIDELINES FOR SUMMARY AND LABELS:
 1. FIND THE PATTERNS: What specific concerns, people, geography or places, events, or topics hold these samples together?
 2. DIFFERENTIATE: Each of the 5 labels should capture a distinct angle (Subject, Tone, Actors, or Context).
 3. SOCIAL REGISTER: What is the nature of the power dynamic? 
@@ -102,9 +137,13 @@ SAMPLES:
             """
         else:
             prompt = f"""
-Examine theserepresentative samples from a specific cluster. Return 5 labels that capture the 'semantic glue' that defines this group.
+Examine these representative samples from a specific cluster. 
 
-Identify the 'semantic glue'—the shared motifs, social registers, or specific historical concerns—that defines this group. Each label should strive to be one word or three words at maximum (use CamelCase), and should capture a distinct aspect of the sub-cluster's identity that crosses all samples.
+Step 1: Provide a short paragraph summarizing the common themes across the samples. Identify the 'semantic glue'—the shared motifs, social registers, specific historical concerns, people, places, or events—that defines this group. Make sure not to summarize each sample individually, but to synthesize the commonalities across all of them that led to their grouping in the same cluster.
+
+Step 2: After summarizing the common threads/themes holding the samples together, use that summary to return 5 labels that capture the 'semantic glue' that defines this group from its summary. Each label should strive to be one word or three words at maximum (use CamelCase), and should capture a distinct aspect of the sub-cluster's identity that crosses all samples.
+
+
 
 GUIDELINES FOR LABELS:
 - **Avoid Anachronism:** Use period-appropriate terminology (e.g., 'Natural Philosophy' instead of 'Science').
@@ -131,15 +170,18 @@ SAMPLES:
                 chat_response = client.chat.parse(
                     model=MODEL_ID,
                     messages=messages,
-                    response_format=ClusterGeminiModel,
+                    response_format=ClusterGeminiModelWithSummary,
                 )
-                tags: ClusterGeminiModel = chat_response.choices[0].message.parsed
+                tags: ClusterGeminiModelWithSummary = chat_response.choices[
+                    0
+                ].message.parsed
                 tags_list = [
                     tags.label1,
                     tags.label2,
                     tags.label3,
                     tags.label4,
                     tags.label5,
+                    tags.summary,
                 ]
                 cluster_response.append(
                     ClusterWithTags(label=cluster.label, tags=tags_list)
@@ -155,24 +197,43 @@ SAMPLES:
 
 def get_mistral_summary(
     text: str,
-) -> LetterSummary:
+) -> LetterSummaryV2:
     api_key = os.environ["MISTRAL_KEY"]
     MODEL_ID = "mistral-large-latest"
     client = Mistral(api_key=api_key)
     system_prompt: str = (
-        """You are an early modern historian. Your task is to read the following letter and extract the key information about the letter's author, recipient, date, summary, and any people, places, or events referenced in the letter. The letter is written in 16th-century English and may contain archaic language and spelling. Focus on the underlying meaning and intent of the letter rather than getting caught up in the orthographic quirks of the period."""
+        "You are an expert early modern historian and archivist. "
+        "Your task is to analyse a letter and extract two layers of information: "
+        "(1) letter-level metadata, and "
+        "(2) a sequential breakdown ofthe principal matters, pieces of business, or news the letter substantively addresses — "
+        "what a secretary or archivist would record as the letter's main 'articles'."
+        "The letter may be written in 16th-century English, French, Latin, Italian, or Turkish "
+        "and may contain archaic language and spelling. "
+        "Focus on the underlying meaning and intent rather than orthographic quirks."
     )
-    prompt = f"""Read the following letter and extract the key information about the letter's author, recipient, date, summary, and any people, places, or events referenced in the letter. The letter is written in 16th-century English, French, Latin, Italian, or Turkish and may contain archaic language and spelling. Return the following informaiton:
-    
+    prompt = f"""Read the following letter and extract two levels of information.
+
+LETTER-LEVEL METADATA:
 1. Author: Who wrote the letter?
-2. Author Location: Where was the author located when they wrote the letter?
-3. Recipient: Who was the letter addressed to?
-4. Recipient Location: Where was the recipient located when they received the letter?
+2. Author Location: Where was the author writing from?
+3. Recipient: Who is the letter addressed to?
+4. Recipient Location: Where was the recipient?
 5. Date: When was the letter written?
-6. Summary: What is the main point or purpose of the letter?
-7. People Referenced: List any people mentioned in the letter.
-8. Places Referenced: List any places mentioned in the letter.
-9. Events Referenced: List any events mentioned in the letter.
+6. Summary: Overview of the letter's main purpose.
+
+NOTE-LEVEL — DISCRETE MATTERS (in the order they appear):
+Identify each distinct topic, news item, or piece of business the writer discusses.
+For each note provide:
+- summary: A few sentences describing this specific matter
+- people_referenced: people mentioned in this matter
+- places_referenced: places mentioned in this matter
+- events_referenced: events mentioned in this matter
+
+RULES:
+- A letter may have 1 to 7 notes. Most letters have 2-4.
+- Do NOT create notes for epistolary boilerplate (greetings, closings, expressions of loyalty).
+- Each note must represent a substantively different matter from the others.
+- If the entire letter concerns a single matter, return exactly one note.
 
 LETTER:
 {text}
@@ -181,26 +242,62 @@ LETTER:
     try:
         messages = [
             {"role": "system", "content": system_prompt},
-            {
-                "role": "user",
-                "content": prompt,
-            },
+            {"role": "user", "content": prompt},
         ]
         chat_response = client.chat.parse(
             model=MODEL_ID,
             messages=messages,
-            response_format=LetterSummary,
+            response_format=LetterSummaryV2,
         )
-        summary: LetterSummary = chat_response.choices[0].message.parsed
+        summary: LetterSummaryV2 = chat_response.choices[0].message.parsed
+
+        summary.version = 2  # Explicitly set verion to 2 for clarity.
         return summary
     except Exception as e:
         print(f"Error occurred while summarizing letter: {e}")
-        return LetterSummary(
+        return LetterSummaryV2(
             author="",
             author_location="",
             recipient_location="",
             recipient="",
             date="",
+            summary="",
+            notes=[],
+        )
+
+
+def get_mistral_chapter_summary(text: str) -> ChapterSummary:
+    api_key = os.environ["MISTRAL_KEY"]
+    MODEL_ID = "mistral-large-latest"
+    client = Mistral(api_key=api_key)
+    system_prompt = (
+        "You are an early modern historian. Your task is to read the following text excerpt "
+        "and extract its key content: a concise summary and any people, places, or events referenced. "
+        "The text may be in English, French, Latin, Italian, or Turkish and may contain archaic language."
+    )
+    prompt = f"""Read the following text and extract:
+
+1. Summary: What is the main subject or argument of this passage?
+2. People Referenced: List any people mentioned.
+3. Places Referenced: List any places mentioned.
+4. Events Referenced: List any events mentioned.
+
+TEXT:
+{text}
+"""
+    try:
+        chat_response = client.chat.parse(
+            model=MODEL_ID,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt},
+            ],
+            response_format=ChapterSummary,
+        )
+        return chat_response.choices[0].message.parsed
+    except Exception as e:
+        print(f"Error occurred while summarizing chapter: {e}")
+        return ChapterSummary(
             summary="",
             people_referenced=[],
             places_referenced=[],

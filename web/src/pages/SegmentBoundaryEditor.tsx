@@ -1,0 +1,480 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import {
+  api,
+  type BoundaryItem,
+  type ExcludedLineItem,
+  type OcrPage,
+} from "../api/client";
+
+interface LocalBoundary extends BoundaryItem {
+  _key: string; // page_index:line_index
+}
+
+function boundaryKey(pageIndex: number, lineIndex: number) {
+  return `${pageIndex}:${lineIndex}`;
+}
+
+export default function SegmentBoundaryEditor() {
+  const { bookId } = useParams<{ bookId: string }>();
+  const navigate = useNavigate();
+
+  const [pages, setPages] = useState<OcrPage[]>([]);
+  const [excludedPages, setExcludedPages] = useState<Set<number>>(new Set());
+  const [excludedLines, setExcludedLines] = useState<Set<string>>(new Set());
+  const [boundaries, setBoundaries] = useState<LocalBoundary[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [error, setError] = useState("");
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Drag-select for line exclusion (Ctrl+right-click drag)
+  const dragRef = useRef<{
+    adding: boolean;
+    startKey: string;
+    currentKeys: Set<string>;
+  } | null>(null);
+  const [dragKeys, setDragKeys] = useState<Set<string>>(new Set());
+  // Ref mirrors for stale-closure-free global event handler
+  const stateRef = useRef({ excludedLines, boundaries, excludedPages });
+  const allLineKeysRef = useRef<string[]>([]);
+
+  // Load pages and any saved draft
+  useEffect(() => {
+    Promise.all([api.books.pages(bookId!), api.boundaries.get(bookId!)])
+      .then(([pagesData, draft]) => {
+        setPages(pagesData);
+        setExcludedPages(new Set(draft.excluded_pages));
+        setExcludedLines(
+          new Set(
+            (draft.excluded_lines ?? []).map((l) =>
+              boundaryKey(l.page_index, l.line_index),
+            ),
+          ),
+        );
+        setBoundaries(
+          draft.boundaries.map((b) => ({
+            ...b,
+            _key: boundaryKey(b.page_index, b.line_index),
+          })),
+        );
+      })
+      .catch((e) => setError(e.message));
+  }, [bookId]);
+
+  // Keep stateRef in sync
+  useEffect(() => {
+    stateRef.current = { excludedLines, boundaries, excludedPages };
+  }, [excludedLines, boundaries, excludedPages]);
+
+  // Flat ordered list of all visible line keys, for drag-range lookup
+  const allLineKeys = useMemo(() => {
+    const keys: string[] = [];
+    for (const page of pages) {
+      if (!excludedPages.has(page.page_index)) {
+        for (let li = 0; li < page.lines.length; li++) {
+          keys.push(boundaryKey(page.page_index, li));
+        }
+      }
+    }
+    return keys;
+  }, [pages, excludedPages]);
+
+  useEffect(() => {
+    allLineKeysRef.current = allLineKeys;
+  }, [allLineKeys]);
+
+  // Auto-save draft 800ms after changes
+  const scheduleSave = useCallback(
+    (
+      newBoundaries: LocalBoundary[],
+      newExcluded: Set<number>,
+      newExcludedLines: Set<string>,
+    ) => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+      saveTimer.current = setTimeout(async () => {
+        setSaving(true);
+        try {
+          await api.boundaries.save(bookId!, {
+            boundaries: newBoundaries.map(({ _key, ...b }) => b),
+            excluded_pages: Array.from(newExcluded),
+            excluded_lines: Array.from(newExcludedLines).map((key) => {
+              const [pi, li] = key.split(":").map(Number);
+              return { page_index: pi, line_index: li } as ExcludedLineItem;
+            }),
+          });
+        } catch (e: any) {
+          setError(e.message);
+        } finally {
+          setSaving(false);
+        }
+      }, 800);
+    },
+    [bookId],
+  );
+
+  // Global mouseup: apply the accumulated drag range
+  useEffect(() => {
+    const handleMouseUp = (e: MouseEvent) => {
+      if (e.button !== 2 || !dragRef.current) return;
+      const { adding, currentKeys } = dragRef.current;
+      dragRef.current = null;
+      setDragKeys(new Set());
+      if (currentKeys.size === 0) return;
+      const {
+        excludedLines: cur,
+        boundaries: curB,
+        excludedPages: curP,
+      } = stateRef.current;
+      const next = new Set(cur);
+      currentKeys.forEach((key) => {
+        if (adding) next.add(key);
+        else next.delete(key);
+      });
+      setExcludedLines(next);
+      scheduleSave(curB, curP, next);
+    };
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => window.removeEventListener("mouseup", handleMouseUp);
+  }, [scheduleSave]);
+
+  const toggleLine = (pageIndex: number, lineIndex: number) => {
+    const key = boundaryKey(pageIndex, lineIndex);
+    const exists = boundaries.find((b) => b._key === key);
+
+    let updated: LocalBoundary[];
+    if (exists) {
+      updated = boundaries.filter((b) => b._key !== key);
+    } else {
+      const newBoundary: LocalBoundary = {
+        boundary_index: 0, // re-indexed on save
+        page_index: pageIndex,
+        line_index: lineIndex,
+        segment_title: "",
+        _key: key,
+      };
+      updated = [...boundaries, newBoundary].sort(
+        (a, b) => a.page_index - b.page_index || a.line_index - b.line_index,
+      );
+    }
+
+    // Re-index
+    updated = updated.map((b, i) => ({ ...b, boundary_index: i }));
+    setBoundaries(updated);
+    scheduleSave(updated, excludedPages, excludedLines);
+  };
+
+  const toggleExclude = (pageIndex: number) => {
+    const next = new Set(excludedPages);
+    if (next.has(pageIndex)) next.delete(pageIndex);
+    else next.add(pageIndex);
+    setExcludedPages(next);
+    scheduleSave(boundaries, next, excludedLines);
+  };
+
+  const toggleExcludeLine = (pageIndex: number, lineIndex: number) => {
+    const key = boundaryKey(pageIndex, lineIndex);
+    const next = new Set(excludedLines);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    setExcludedLines(next);
+    scheduleSave(boundaries, excludedPages, next);
+  };
+
+  const updateTitle = (key: string, title: string) => {
+    const updated = boundaries.map((b) =>
+      b._key === key ? { ...b, segment_title: title } : b,
+    );
+    setBoundaries(updated);
+    scheduleSave(updated, excludedPages, excludedLines);
+  };
+
+  const handleConfirm = async () => {
+    setConfirming(true);
+    try {
+      await api.boundaries.save(bookId!, {
+        boundaries: boundaries.map(({ _key, ...b }) => b),
+        excluded_pages: Array.from(excludedPages),
+        excluded_lines: Array.from(excludedLines).map((key) => {
+          const [pi, li] = key.split(":").map(Number);
+          return { page_index: pi, line_index: li } as ExcludedLineItem;
+        }),
+      });
+      await api.boundaries.confirm(bookId!);
+      navigate(`/books/${bookId}`);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setConfirming(false);
+    }
+  };
+
+  // Build live segment preview from current markers + excluded pages
+  const segmentPreviews = boundaries.map((b, i) => {
+    const nextB = boundaries[i + 1];
+    const startLabel = `p${b.page_index + 1} line ${b.line_index + 1}`;
+    const endLabel = nextB
+      ? `p${nextB.page_index + 1} line ${nextB.line_index}`
+      : "end";
+    return {
+      key: b._key,
+      title: b.segment_title || `Segment ${i + 1}`,
+      range: `${startLabel} → ${endLabel}`,
+    };
+  });
+
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "1fr 320px",
+        gap: "1rem",
+        height: "100%",
+        overflow: "hidden",
+      }}
+    >
+      {/* Left: pages */}
+      <div style={{ overflowY: "auto", paddingRight: "0.5rem" }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "1rem",
+            marginBottom: "1rem",
+          }}
+        >
+          <Link
+            to={`/books/${bookId}`}
+            style={{ color: "#6b7280", fontSize: "0.85rem" }}
+          >
+            ← Back
+          </Link>
+          <h2 style={{ margin: 0, fontSize: "1rem" }}>
+            Segment Boundary Editor
+          </h2>
+          {saving && (
+            <span style={{ color: "#6b7280", fontSize: "0.75rem" }}>
+              Saving…
+            </span>
+          )}
+        </div>
+        {error && <p className="error-msg">{error}</p>}
+
+        {pages.map((page) => {
+          const isExcluded = excludedPages.has(page.page_index);
+          return (
+            <div
+              key={page.page_index}
+              className="card"
+              style={{
+                marginBottom: "0.75rem",
+                opacity: isExcluded ? 0.4 : 1,
+                position: "relative",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: "0.5rem",
+                }}
+              >
+                <span
+                  style={{
+                    fontWeight: 600,
+                    fontSize: "0.8rem",
+                    color: "#6b7280",
+                  }}
+                >
+                  Page {page.page_index + 1}
+                </span>
+                <button
+                  className={`btn ${isExcluded ? "btn-secondary" : "btn-danger"}`}
+                  style={{ fontSize: "0.7rem", padding: "0.2rem 0.5rem" }}
+                  onClick={() => toggleExclude(page.page_index)}
+                >
+                  {isExcluded ? "Include" : "Exclude"}
+                </button>
+              </div>
+
+              {!isExcluded &&
+                page.lines.map((line, lineIdx) => {
+                  const key = boundaryKey(page.page_index, lineIdx);
+                  const isBoundary = boundaries.some((b) => b._key === key);
+                  const isLineExcluded = excludedLines.has(key);
+                  return (
+                    <div key={lineIdx} style={{ position: "relative" }}>
+                      {isBoundary && (
+                        <div
+                          style={{
+                            borderTop: "2px solid #4f46e5",
+                            marginBottom: "2px",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.4rem",
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontSize: "0.65rem",
+                              background: "#4f46e5",
+                              color: "#fff",
+                              padding: "0 0.3rem",
+                              borderRadius: "3px",
+                            }}
+                          >
+                            ▶{" "}
+                            {boundaries.find((b) => b._key === key)
+                              ?.segment_title || "Segment start"}
+                          </span>
+                        </div>
+                      )}
+                      <p
+                        onClick={() => toggleLine(page.page_index, lineIdx)}
+                        onMouseDown={(e) => {
+                          if (e.button === 2 && e.ctrlKey) {
+                            e.preventDefault();
+                            const key = boundaryKey(page.page_index, lineIdx);
+                            const adding =
+                              !stateRef.current.excludedLines.has(key);
+                            dragRef.current = {
+                              adding,
+                              startKey: key,
+                              currentKeys: new Set([key]),
+                            };
+                            setDragKeys(new Set([key]));
+                          }
+                        }}
+                        onMouseEnter={() => {
+                          if (!dragRef.current) return;
+                          const endKey = boundaryKey(page.page_index, lineIdx);
+                          const allKeys = allLineKeysRef.current;
+                          const startIdx = allKeys.indexOf(
+                            dragRef.current.startKey,
+                          );
+                          const endIdx = allKeys.indexOf(endKey);
+                          if (startIdx === -1 || endIdx === -1) return;
+                          const lo = Math.min(startIdx, endIdx);
+                          const hi = Math.max(startIdx, endIdx);
+                          const range = new Set(allKeys.slice(lo, hi + 1));
+                          dragRef.current.currentKeys = range;
+                          setDragKeys(range);
+                        }}
+                        onContextMenu={(e) => {
+                          if (e.ctrlKey) e.preventDefault();
+                        }}
+                        className="boundary-line"
+                        style={{
+                          margin: "1px 0",
+                          padding: "2px 4px",
+                          cursor: "pointer",
+                          fontSize: "0.8rem",
+                          lineHeight: 1.5,
+                          borderRadius: "3px",
+                          background: isBoundary
+                            ? "#eef2ff"
+                            : dragKeys.has(key)
+                              ? "#fef9c3"
+                              : undefined,
+                          outline: dragKeys.has(key)
+                            ? "1px solid #fbbf24"
+                            : undefined,
+                          textDecoration: isLineExcluded
+                            ? "line-through"
+                            : undefined,
+                          color: isLineExcluded ? "#ef4444" : undefined,
+                          opacity: isLineExcluded ? 0.6 : undefined,
+                          minHeight: "1em",
+                          whiteSpace: "pre-wrap",
+                          userSelect: "none",
+                        }}
+                        data-line-label={`p${page.page_index + 1} · line ${lineIdx + 1}`}
+                      >
+                        {line || "\u00A0"}
+                      </p>
+                    </div>
+                  );
+                })}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Right: segment list */}
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: "0.75rem",
+          overflow: "hidden",
+          minHeight: 0,
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <h3 style={{ margin: 0, fontSize: "0.9rem" }}>
+            {boundaries.length} segment{boundaries.length !== 1 ? "s" : ""}
+          </h3>
+          <button
+            className="btn btn-success"
+            disabled={boundaries.length === 0 || confirming}
+            onClick={handleConfirm}
+          >
+            {confirming ? "Saving…" : "Confirm"}
+          </button>
+        </div>
+
+        <p style={{ margin: 0, fontSize: "0.75rem", color: "#6b7280" }}>
+          Click any line to start a new segment. Ctrl+right-click to exclude a
+          line; Ctrl+right-click and drag to exclude a range.
+        </p>
+
+        <div
+          style={{
+            overflowY: "auto",
+            flex: 1,
+            minHeight: 0,
+            display: "grid",
+            gap: "0.5rem",
+            alignContent: "start",
+          }}
+        >
+          {segmentPreviews.map((seg) => (
+            <div
+              key={seg.key}
+              className="card"
+              style={{ padding: "0.5rem 0.75rem" }}
+            >
+              <input
+                value={
+                  boundaries.find((b) => b._key === seg.key)?.segment_title ??
+                  ""
+                }
+                placeholder={seg.title}
+                onChange={(e) => updateTitle(seg.key, e.target.value)}
+                style={{
+                  width: "100%",
+                  border: "none",
+                  fontWeight: 600,
+                  fontSize: "0.85rem",
+                  padding: 0,
+                  outline: "none",
+                  boxSizing: "border-box",
+                }}
+              />
+              <span style={{ color: "#9ca3af", fontSize: "0.7rem" }}>
+                {seg.range}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}

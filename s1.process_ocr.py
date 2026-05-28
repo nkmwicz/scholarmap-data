@@ -1,6 +1,6 @@
 import sys
 from pathlib import Path
-from utils.check_env import check_environment
+from api.utils.check_env import check_environment
 
 check_environment()
 
@@ -9,7 +9,7 @@ import questionary
 
 load_dotenv("./.env")
 
-from ocr.ocr_pdf import ocr_pdf
+from api.ocr.ocr_pdf import ocr_pdf
 
 name = questionary.text("Name for this document (must be unique):").ask()
 if not name or not name.strip():
