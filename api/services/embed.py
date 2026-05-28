@@ -70,7 +70,7 @@ async def embed_book(book_id: uuid.UUID, db: AsyncSession) -> int:
         for idx, chunk_text in enumerate(chunks):
             wlen = _word_len(chunk_text)
             if seg_total_words > 0 and n_pages > 0:
-                word_start = idx * step
+                word_start = max(0, idx * step - CHUNK_OVERLAP)
                 word_end = min(word_start + wlen, seg_total_words)
                 ps = min(int(word_start / seg_total_words * n_pages), n_pages - 1)
                 pe = min(int(word_end / seg_total_words * n_pages), n_pages - 1)
