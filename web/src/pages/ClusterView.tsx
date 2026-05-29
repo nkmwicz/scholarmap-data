@@ -661,6 +661,15 @@ export default function ClusterView() {
             >
               {topClusters.map((c) => {
                 const isActive = selectedCluster?.id === c.id;
+                const baseBg = isActive ? "#ede9fe" : "#f9fafb";
+                let pillBg = baseBg;
+                if (c.total_count > 0) {
+                  const unimportantPct =
+                    (c.unimportant_count / c.total_count) * 100;
+                  const neo4jPct = (c.neo4j_count / c.total_count) * 100;
+                  const reviewedPct = unimportantPct + neo4jPct;
+                  pillBg = `linear-gradient(to right, #fecaca 0%, #fecaca ${unimportantPct}%, #bbf7d0 ${unimportantPct}%, #bbf7d0 ${reviewedPct}%, ${baseBg} ${reviewedPct}%, ${baseBg} 100%)`;
+                }
                 return (
                   <button
                     key={c.id}
@@ -669,7 +678,7 @@ export default function ClusterView() {
                       padding: "0.2rem 0.65rem",
                       fontSize: "0.72rem",
                       fontWeight: isActive ? 600 : 400,
-                      background: isActive ? "#ede9fe" : "#f9fafb",
+                      background: pillBg,
                       color: isActive ? "#5b21b6" : "#374151",
                       border: `1px solid ${isActive ? "#c4b5fd" : "#e5e7eb"}`,
                       borderRadius: 9999,

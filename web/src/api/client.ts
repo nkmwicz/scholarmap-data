@@ -166,6 +166,9 @@ export interface Cluster {
   is_subcluster: boolean;
   parent_cluster_id: string | null;
   representative_samples: RepresentativeSample[];
+  total_count: number;
+  unimportant_count: number;
+  neo4j_count: number;
 }
 
 export interface SubclusterInfo {

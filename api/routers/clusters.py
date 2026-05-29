@@ -1,7 +1,7 @@
 import uuid
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.db import get_db
@@ -24,6 +24,9 @@ class ClusterOut(BaseModel):
     is_subcluster: bool
     parent_cluster_id: uuid.UUID | None
     representative_samples: list[RepresentativeSample]
+    total_count: int = 0
+    unimportant_count: int = 0
+    neo4j_count: int = 0
 
     model_config = {"from_attributes": True}
 
@@ -373,12 +376,76 @@ async def get_segment_chunks_with_labels(
 
 @router.get("/{book_id}/clusters", response_model=list[ClusterOut])
 async def get_clusters(book_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    book_result = await db.execute(select(Book).where(Book.id == book_id))
+    book = book_result.scalar_one_or_none()
+    if not book:
+        raise HTTPException(404, "Book not found")
+
     clusters_result = await db.execute(
         select(Cluster)
         .where(Cluster.book_id == book_id)
         .order_by(Cluster.cluster_index)
     )
-    clusters = clusters_result.scalars().all()
+    clusters = list(clusters_result.scalars().all())
+    cluster_ids = [c.id for c in clusters]
+
+    # Build per-cluster review counts in one query.
+    # For chapters we count chunks; for letters/other we count distinct segments.
+    count_map: dict[uuid.UUID, dict[str, int]] = {}
+    if cluster_ids:
+        if book.document_type == "chapters":
+            counts_result = await db.execute(
+                select(
+                    ClusterMembership.cluster_id,
+                    func.count(SegmentChunk.id).label("total"),
+                    func.count(
+                        case((SegmentChunk.unimportant == True, SegmentChunk.id))
+                    ).label("unimportant"),
+                    func.count(
+                        case(
+                            (
+                                (SegmentChunk.neo4j_entered == True)
+                                & (SegmentChunk.unimportant == False),
+                                SegmentChunk.id,
+                            )
+                        )
+                    ).label("neo4j"),
+                )
+                .join(SegmentChunk, SegmentChunk.id == ClusterMembership.chunk_id)
+                .where(ClusterMembership.cluster_id.in_(cluster_ids))
+                .group_by(ClusterMembership.cluster_id)
+            )
+        else:
+            counts_result = await db.execute(
+                select(
+                    ClusterMembership.cluster_id,
+                    func.count(func.distinct(Segment.id)).label("total"),
+                    func.count(
+                        func.distinct(case((Segment.unimportant == True, Segment.id)))
+                    ).label("unimportant"),
+                    func.count(
+                        func.distinct(
+                            case(
+                                (
+                                    (Segment.neo4j_entered == True)
+                                    & (Segment.unimportant == False),
+                                    Segment.id,
+                                )
+                            )
+                        )
+                    ).label("neo4j"),
+                )
+                .join(SegmentChunk, SegmentChunk.id == ClusterMembership.chunk_id)
+                .join(Segment, Segment.id == SegmentChunk.segment_id)
+                .where(ClusterMembership.cluster_id.in_(cluster_ids))
+                .group_by(ClusterMembership.cluster_id)
+            )
+        for row in counts_result.all():
+            count_map[row.cluster_id] = {
+                "total": row.total,
+                "unimportant": row.unimportant,
+                "neo4j": row.neo4j,
+            }
 
     out: list[ClusterOut] = []
     for cluster in clusters:
@@ -396,6 +463,7 @@ async def get_clusters(book_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
             )
             for chunk, title in reps_result.all()
         ]
+        counts = count_map.get(cluster.id, {"total": 0, "unimportant": 0, "neo4j": 0})
         out.append(
             ClusterOut(
                 id=cluster.id,
@@ -404,6 +472,9 @@ async def get_clusters(book_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
                 is_subcluster=cluster.is_subcluster,
                 parent_cluster_id=cluster.parent_cluster_id,
                 representative_samples=samples,
+                total_count=counts["total"],
+                unimportant_count=counts["unimportant"],
+                neo4j_count=counts["neo4j"],
             )
         )
     return out
