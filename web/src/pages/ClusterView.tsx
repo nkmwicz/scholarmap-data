@@ -219,12 +219,56 @@ export default function ClusterView() {
     fetchSegments(sub.id);
   };
 
+  // Reactively update cluster pill counts when a chunk/segment flag is toggled.
+  // neo4j_count only counts items where neo4j=true AND unimportant=false.
+  const adjustClusterCounts = (
+    parentIndices: number[],
+    field: "neo4j_entered" | "unimportant",
+    newValue: boolean,
+    prevNeo4j: boolean,
+    prevUnimportant: boolean,
+  ) => {
+    let neo4j_delta = 0;
+    let unimportant_delta = 0;
+    if (field === "neo4j_entered") {
+      if (!prevUnimportant) neo4j_delta = newValue ? 1 : -1;
+    } else {
+      unimportant_delta = newValue ? 1 : -1;
+      if (prevNeo4j) neo4j_delta = newValue ? -1 : 1;
+    }
+    if (neo4j_delta === 0 && unimportant_delta === 0) return;
+    setClusters((prev) =>
+      prev.map((c) =>
+        parentIndices.includes(c.cluster_index)
+          ? {
+              ...c,
+              neo4j_count: Math.max(0, c.neo4j_count + neo4j_delta),
+              unimportant_count: Math.max(
+                0,
+                c.unimportant_count + unimportant_delta,
+              ),
+            }
+          : c,
+      ),
+    );
+  };
+
   // Update a single chunk's flags in the segmentChunks list
   const handleChunkPatch = (
     chunkId: string,
     field: "neo4j_entered" | "unimportant",
     value: boolean,
   ) => {
+    const existing = segmentChunks.find((c) => c.chunk_id === chunkId);
+    if (existing && existing[field] !== value) {
+      adjustClusterCounts(
+        existing.cluster_labels.map((l) => l.parent_index),
+        field,
+        value,
+        existing.neo4j_entered,
+        existing.unimportant,
+      );
+    }
     setSegmentChunks((prev) =>
       prev.map((c) => (c.chunk_id === chunkId ? { ...c, [field]: value } : c)),
     );
@@ -1031,6 +1075,15 @@ export default function ClusterView() {
                                   neo4j_entered: newVal,
                                 },
                               );
+                              adjustClusterCounts(
+                                selectedCluster
+                                  ? [selectedCluster.cluster_index]
+                                  : [],
+                                "neo4j_entered",
+                                newVal,
+                                selectedChunk.neo4j_entered,
+                                selectedChunk.unimportant,
+                              );
                               const updated = {
                                 ...selectedChunk,
                                 neo4j_entered: newVal,
@@ -1089,6 +1142,15 @@ export default function ClusterView() {
                                 {
                                   unimportant: newVal,
                                 },
+                              );
+                              adjustClusterCounts(
+                                selectedCluster
+                                  ? [selectedCluster.cluster_index]
+                                  : [],
+                                "unimportant",
+                                newVal,
+                                selectedChunk.neo4j_entered,
+                                selectedChunk.unimportant,
                               );
                               const updated = {
                                 ...selectedChunk,
@@ -1553,6 +1615,15 @@ export default function ClusterView() {
                         segment={selectedSegment}
                         bookId={bookId!}
                         onUpdate={(updated) => {
+                          if (selectedCluster) {
+                            adjustClusterCounts(
+                              [selectedCluster.cluster_index],
+                              "neo4j_entered",
+                              updated.neo4j_entered,
+                              selectedSegment.neo4j_entered,
+                              selectedSegment.unimportant,
+                            );
+                          }
                           setSelectedSegment(updated);
                           setSegments((prev) =>
                             prev.map((s) =>
@@ -1571,6 +1642,15 @@ export default function ClusterView() {
                         segment={selectedSegment}
                         bookId={bookId!}
                         onUpdate={(updated) => {
+                          if (selectedCluster) {
+                            adjustClusterCounts(
+                              [selectedCluster.cluster_index],
+                              "unimportant",
+                              updated.unimportant,
+                              selectedSegment.neo4j_entered,
+                              selectedSegment.unimportant,
+                            );
+                          }
                           setSelectedSegment(updated);
                           setSegments((prev) =>
                             prev.map((s) =>
