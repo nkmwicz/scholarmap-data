@@ -917,6 +917,8 @@ export default function BookList() {
                                   ),
                                 },
                             ),
+                          gallicaUrl: viewer.book?.gallica_url,
+                          gallicaOffset: viewer.book?.gallica_offset,
                         })}
                         onFindSimilar={(chunkId) => {
                           setViewer(null);

@@ -60,6 +60,8 @@ interface ChunkedTextProps {
     value: boolean,
   ) => void;
   onFindSimilar?: (chunkId: string) => void;
+  gallicaUrl?: string | null;
+  gallicaOffset?: number | null;
 }
 
 export function ChunkedSegmentText({
@@ -71,6 +73,8 @@ export function ChunkedSegmentText({
   bookId,
   onChunkPatch,
   onFindSimilar,
+  gallicaUrl,
+  gallicaOffset,
 }: ChunkedTextProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [togglingChunk, setTogglingChunk] = useState<string | null>(null);
@@ -309,6 +313,39 @@ export function ChunkedSegmentText({
             >
               {chunk.text}
             </p>
+
+            {/* Gallica URL box — chapters only, when gallicaUrl provided */}
+            {gallicaUrl &&
+              gallicaOffset != null &&
+              chunk.page_range.length > 0 && (
+                <div
+                  style={{
+                    marginTop: "0.5rem",
+                    padding: "0.3rem 0.5rem",
+                    background: "#f9fafb",
+                    border: "1px solid #e5e7eb",
+                    borderRadius: 4,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "0.15rem",
+                  }}
+                >
+                  {chunk.page_range.map((page) => (
+                    <span
+                      key={page}
+                      style={{
+                        fontSize: "0.68rem",
+                        fontFamily: "monospace",
+                        color: "#374151",
+                        wordBreak: "break-all",
+                        userSelect: "all",
+                      }}
+                    >
+                      {`${gallicaUrl.replace(/\/$/, "")}/f${page + gallicaOffset}.highres`}
+                    </span>
+                  ))}
+                </div>
+              )}
 
             {/* Hover popover — cluster details */}
             {isHovered && popoverTags.length > 0 && (
