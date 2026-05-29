@@ -34,6 +34,8 @@ class SearchResultItem(BaseModel):
     book_author: str | None
     book_year: str | None
     cluster_labels: list[ClusterLabel]
+    neo4j_entered: bool
+    unimportant: bool
 
 
 @router.post("", response_model=list[SearchResultItem])
@@ -53,6 +55,8 @@ async def search(payload: SearchQuery, db: AsyncSession = Depends(get_db)):
                 sc.id            AS chunk_id,
                 sc.text          AS chunk_text,
                 1 - (sc.embedding <=> CAST(:vec AS vector)) AS score,
+                sc.neo4j_entered,
+                sc.unimportant,
                 s.id             AS segment_id,
                 s.segment_index,
                 s.title          AS segment_title,
@@ -140,6 +144,8 @@ async def search(payload: SearchQuery, db: AsyncSession = Depends(get_db)):
                 book_title=r["book_title"],
                 book_author=r["book_author"],
                 book_year=r["book_year"],
+                neo4j_entered=bool(r["neo4j_entered"]),
+                unimportant=bool(r["unimportant"]),
                 cluster_labels=sorted(
                     labels,
                     key=lambda x: (
@@ -178,6 +184,8 @@ async def similar(
                 sc.id            AS chunk_id,
                 sc.text          AS chunk_text,
                 1 - (sc.embedding <=> CAST(:vec AS vector)) AS score,
+                sc.neo4j_entered,
+                sc.unimportant,
                 s.id             AS segment_id,
                 s.segment_index,
                 s.title          AS segment_title,
@@ -264,6 +272,8 @@ async def similar(
                 book_title=r["book_title"],
                 book_author=r["book_author"],
                 book_year=r["book_year"],
+                neo4j_entered=bool(r["neo4j_entered"]),
+                unimportant=bool(r["unimportant"]),
                 cluster_labels=sorted(
                     labels,
                     key=lambda x: (

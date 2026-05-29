@@ -303,6 +303,36 @@ export default function BookList() {
                         >
                           {r.segment_title || `Letter ${r.segment_index + 1}`}
                         </span>
+                        {r.neo4j_entered && (
+                          <span
+                            style={{
+                              fontSize: "0.62rem",
+                              padding: "0.1rem 0.4rem",
+                              borderRadius: 4,
+                              border: "1px solid #059669",
+                              background: "#ecfdf5",
+                              color: "#059669",
+                              fontWeight: 600,
+                            }}
+                          >
+                            ✔ Neo4j
+                          </span>
+                        )}
+                        {r.unimportant && (
+                          <span
+                            style={{
+                              fontSize: "0.62rem",
+                              padding: "0.1rem 0.4rem",
+                              borderRadius: 4,
+                              border: "1px solid #dc2626",
+                              background: "#fef2f2",
+                              color: "#dc2626",
+                              fontWeight: 600,
+                            }}
+                          >
+                            ✗ Unimportant
+                          </span>
+                        )}
                         <span
                           style={{
                             color: "#6b7280",
@@ -389,9 +419,12 @@ export default function BookList() {
                       style={{
                         margin: 0,
                         fontSize: "0.78rem",
-                        color: "#374151",
+                        color: r.unimportant ? "#9ca3af" : "#374151",
                         lineHeight: 1.6,
                         fontFamily: "Georgia, serif",
+                        textDecoration: r.unimportant
+                          ? "line-through"
+                          : undefined,
                       }}
                     >
                       {r.chunk_text.length > 300

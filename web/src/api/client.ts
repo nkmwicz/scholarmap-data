@@ -75,6 +75,8 @@ export interface SearchResult {
   book_author: string | null;
   book_year: string | null;
   cluster_labels: ClusterLabel[];
+  neo4j_entered: boolean;
+  unimportant: boolean;
 }
 
 export interface LetterSummary {
