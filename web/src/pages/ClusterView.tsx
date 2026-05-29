@@ -1333,6 +1333,41 @@ export default function ClusterView() {
                         }}
                       >
                         {selectedChunk.text}
+                        {selectedChunk.page_range.length > 0 &&
+                          selectedChunk.page_range.some((p) =>
+                            gallicaPageUrl(p),
+                          ) && (
+                            <div
+                              style={{
+                                marginTop: "1rem",
+                                padding: "0.3rem 0.5rem",
+                                background: "#f9fafb",
+                                border: "1px solid #e5e7eb",
+                                borderRadius: 4,
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: "0.15rem",
+                              }}
+                            >
+                              {selectedChunk.page_range.map((page) => {
+                                const url = gallicaPageUrl(page);
+                                return url ? (
+                                  <span
+                                    key={page}
+                                    style={{
+                                      fontSize: "0.68rem",
+                                      fontFamily: "monospace",
+                                      color: "#374151",
+                                      wordBreak: "break-all",
+                                      userSelect: "all",
+                                    }}
+                                  >
+                                    {url}
+                                  </span>
+                                ) : null;
+                              })}
+                            </div>
+                          )}
                       </div>
                     )}
                     {/* Chunk summary */}
@@ -1753,6 +1788,7 @@ export default function ClusterView() {
                         activeSubIndex={activeSubIndex}
                         bookId={bookId}
                         onChunkPatch={handleChunkPatch}
+                        getPageUrl={gallicaPageUrl}
                       />
                     ) : (
                       <div

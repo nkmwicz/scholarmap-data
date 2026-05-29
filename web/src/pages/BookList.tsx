@@ -950,8 +950,12 @@ export default function BookList() {
                                   ),
                                 },
                             ),
-                          gallicaUrl: viewer.book?.gallica_url,
-                          gallicaOffset: viewer.book?.gallica_offset,
+                          getPageUrl: (page: number) => {
+                            const b = viewer.book;
+                            return b?.gallica_url && b.gallica_offset != null
+                              ? `${b.gallica_url}/f${page + b.gallica_offset!}.highres`
+                              : null;
+                          },
                         })}
                         onFindSimilar={(chunkId) => {
                           setViewer(null);
