@@ -299,7 +299,19 @@ export default function ClusterView() {
         >
           ← Back
         </Link>
-        <h2 style={{ margin: 0 }}>Explore Clusters</h2>
+        <h2 style={{ margin: 0 }}>
+          Explore
+          {book && (
+            <>
+              {book.author && <> {book.author}</>}
+              {book.year && <> ({book.year})</>}{" "}
+              {book.title.length > 25
+                ? book.title.slice(0, 25) + "…"
+                : book.title}
+              {book.volume_number != null && <> v.{book.volume_number}</>}
+            </>
+          )}
+        </h2>
         {error && (
           <span className="error-msg" style={{ margin: 0 }}>
             {error}
