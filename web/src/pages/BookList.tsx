@@ -903,6 +903,21 @@ export default function BookList() {
                         chunks={viewer.segmentChunks}
                         clusters={[]}
                         highlightChunkId={viewer.result.chunk_id}
+                        {...(viewer.segment?.document_type === "chapters" && {
+                          bookId: viewer.result.book_id,
+                          onChunkPatch: (chunkId, field, value) =>
+                            setViewer(
+                              (v) =>
+                                v && {
+                                  ...v,
+                                  segmentChunks: v.segmentChunks.map((c) =>
+                                    c.chunk_id === chunkId
+                                      ? { ...c, [field]: value }
+                                      : c,
+                                  ),
+                                },
+                            ),
+                        })}
                         onFindSimilar={(chunkId) => {
                           setViewer(null);
                           runSimilar(
