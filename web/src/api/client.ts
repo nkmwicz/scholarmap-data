@@ -295,6 +295,8 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ query: q, limit }),
       }),
+    similar: (chunkId: string, limit = 20) =>
+      request<SearchResult[]>(`/search/similar/${chunkId}?limit=${limit}`),
   },
 
   clusters: {

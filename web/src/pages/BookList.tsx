@@ -31,6 +31,7 @@ export default function BookList() {
     null,
   );
   const [searchError, setSearchError] = useState("");
+  const [similarLabel, setSimilarLabel] = useState<string | null>(null);
 
   // Viewer modal (opened when a search result is clicked)
   type ViewerState = {
@@ -108,6 +109,30 @@ export default function BookList() {
     }
   };
 
+  const runSimilar = async (chunkId: string, label: string) => {
+    setSearching(true);
+    setSearchError("");
+    setSimilarLabel(label);
+    setSearchInput("");
+    try {
+      const results = await api.search.similar(chunkId);
+      setSearchResults(results);
+    } catch (e: any) {
+      setSearchError(e.message);
+      setSimilarLabel(null);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const handleSimilar = (r: SearchResult, e: React.MouseEvent) => {
+    e.stopPropagation();
+    runSimilar(
+      r.chunk_id,
+      `"${r.segment_title || `Letter ${r.segment_index + 1}`}" (${r.book_title})`,
+    );
+  };
+
   const openViewer = (r: SearchResult) => {
     setViewer({
       result: r,
@@ -173,6 +198,7 @@ export default function BookList() {
                 onClick={() => {
                   setSearchResults(null);
                   setSearchInput("");
+                  setSimilarLabel(null);
                 }}
                 style={{
                   padding: "0.45rem 0.75rem",
@@ -206,7 +232,9 @@ export default function BookList() {
             >
               {searchResults.length === 0
                 ? "No results found."
-                : `${searchResults.length} result${searchResults.length !== 1 ? "s" : ""} for "${searchInput}"`}
+                : similarLabel
+                  ? `${searchResults.length} result${searchResults.length !== 1 ? "s" : ""} similar to ${similarLabel}`
+                  : `${searchResults.length} result${searchResults.length !== 1 ? "s" : ""} for "${searchInput}"`}
             </div>
             <div style={{ display: "grid", gap: "0.65rem" }}>
               {searchResults.map((r) => (
@@ -237,7 +265,35 @@ export default function BookList() {
                         marginBottom: "0.3rem",
                       }}
                     >
-                      <div>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.4rem",
+                        }}
+                      >
+                        <button
+                          title="Find similar chunks"
+                          onClick={(e) => handleSimilar(r, e)}
+                          style={{
+                            flexShrink: 0,
+                            width: 20,
+                            height: 20,
+                            borderRadius: "50%",
+                            border: "1px solid #d1d5db",
+                            background: "#f9fafb",
+                            cursor: "pointer",
+                            fontSize: "0.7rem",
+                            color: "#6b7280",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            padding: 0,
+                            lineHeight: 1,
+                          }}
+                        >
+                          ≈
+                        </button>
                         <span
                           style={{
                             fontWeight: 600,
@@ -251,7 +307,6 @@ export default function BookList() {
                           style={{
                             color: "#6b7280",
                             fontSize: "0.78rem",
-                            marginLeft: "0.5rem",
                           }}
                         >
                           {r.book_title}
@@ -848,6 +903,13 @@ export default function BookList() {
                         chunks={viewer.segmentChunks}
                         clusters={[]}
                         highlightChunkId={viewer.result.chunk_id}
+                        onFindSimilar={(chunkId) => {
+                          setViewer(null);
+                          runSimilar(
+                            chunkId,
+                            `"${viewer.result.segment_title || `Letter ${viewer.result.segment_index + 1}`}" (${viewer.result.book_title})`,
+                          );
+                        }}
                       />
                     ) : (
                       <div

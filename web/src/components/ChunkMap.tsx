@@ -59,6 +59,7 @@ interface ChunkedTextProps {
     field: "neo4j_entered" | "unimportant",
     value: boolean,
   ) => void;
+  onFindSimilar?: (chunkId: string) => void;
 }
 
 export function ChunkedSegmentText({
@@ -69,6 +70,7 @@ export function ChunkedSegmentText({
   highlightChunkId,
   bookId,
   onChunkPatch,
+  onFindSimilar,
 }: ChunkedTextProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [togglingChunk, setTogglingChunk] = useState<string | null>(null);
@@ -176,6 +178,35 @@ export function ChunkedSegmentText({
               transition: "background 0.15s",
             }}
           >
+            {/* Top-left: find similar button */}
+            {onFindSimilar && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onFindSimilar(chunk.chunk_id);
+                }}
+                title="Find similar chunks"
+                style={{
+                  float: "left",
+                  marginRight: "0.5rem",
+                  marginTop: "0.25rem",
+                  width: 18,
+                  height: 18,
+                  flexShrink: 0,
+                  borderRadius: "50%",
+                  border: "1px solid #d1d5db",
+                  background: "#f9fafb",
+                  cursor: "pointer",
+                  fontSize: "0.7rem",
+                  color: "#6b7280",
+                  padding: 0,
+                  lineHeight: "16px",
+                  textAlign: "center",
+                }}
+              >
+                ≈
+              </button>
+            )}
             {/* Top-right badge row: flags + cluster badge */}
             <div
               style={{
