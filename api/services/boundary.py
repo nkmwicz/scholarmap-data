@@ -160,10 +160,10 @@ async def confirm_segments(book_id: uuid.UUID, db: AsyncSession) -> int:
         # text_parts[i] corresponds to page_range[i]; parts are joined with "\n\n".
         page_char_offsets: dict[str, int] = {}
         offset = 0
-        for i, part in enumerate(text_parts):
-            page_char_offsets[str(page_range[i])] = offset
+        for j, part in enumerate(text_parts):
+            page_char_offsets[str(page_range[j])] = offset
             offset += len(part)
-            if i < len(text_parts) - 1:
+            if j < len(text_parts) - 1:
                 offset += 2  # "\n\n" separator
 
         segments.append(
