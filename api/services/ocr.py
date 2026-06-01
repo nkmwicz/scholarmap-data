@@ -31,7 +31,7 @@ async def run_ocr(book_id: uuid.UUID, pdf_bytes: bytes, db: AsyncSession) -> Non
     # Use a custom httpx client with a generous write timeout so large
     # base64-encoded PDFs don't time out during upload.
     http_client = httpx.Client(timeout=httpx.Timeout(timeout=300.0, write=300.0))
-    client = Mistral(api_key=api_key, timeout_ms=300_000, http_client=http_client)
+    client = Mistral(api_key=api_key, timeout_ms=300_000, client=http_client)
 
     # Update status
     result = await db.execute(select(Book).where(Book.id == book_id))
