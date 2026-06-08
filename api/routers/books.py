@@ -10,11 +10,11 @@ from fastapi import (
     UploadFile,
 )
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.db import get_db
-from api.models import Book, ExcludedLine, ExcludedPage, OcrPage
+from api.models import Book, Cluster, ExcludedLine, ExcludedPage, OcrPage, Segment
 from api.services.ocr import get_ocr_progress, run_ocr
 
 router = APIRouter()
@@ -101,6 +101,23 @@ async def set_gallica(
     await db.commit()
     await db.refresh(book)
     return book
+
+
+@router.post("/{book_id}/reset-to-boundaries", status_code=200)
+async def reset_to_boundaries(book_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Book).where(Book.id == book_id))
+    book = result.scalar_one_or_none()
+    if not book:
+        raise HTTPException(404, "Book not found")
+    allowed = {"embedded", "embedding", "clustering", "clustered", "labeling", "labeled", "error"}
+    if book.status not in allowed:
+        raise HTTPException(400, f"Cannot reset from status '{book.status}'")
+
+    await db.execute(delete(Cluster).where(Cluster.book_id == book_id))
+    await db.execute(delete(Segment).where(Segment.book_id == book_id))
+    book.status = "ocr_complete"
+    await db.commit()
+    return {"status": "ocr_complete"}
 
 
 @router.post("/{book_id}/ocr", status_code=202)

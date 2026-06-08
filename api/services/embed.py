@@ -19,6 +19,8 @@ def _word_len(s: str) -> int:
 
 
 def _chunk_text(text: str, max_words: int) -> list[str]:
+    if not text.strip():
+        return []
     if _word_len(text) <= max_words:
         return [text]
     splitter = RecursiveCharacterTextSplitter(

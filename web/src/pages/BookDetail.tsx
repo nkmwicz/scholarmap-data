@@ -11,6 +11,8 @@ export default function BookDetail() {
   const [downloading, setDownloading] = useState(false);
   const [ocrMessage, setOcrMessage] = useState<string | null>(null);
   const [showReembedConfirm, setShowReembedConfirm] = useState(false);
+  const [showChangeBoundariesConfirm, setShowChangeBoundariesConfirm] =
+    useState(false);
   const [boundaryCount, setBoundaryCount] = useState<number | null>(null);
   const [needsBackfill, setNeedsBackfill] = useState(false);
   const [backfilling, setBackfilling] = useState(false);
@@ -115,6 +117,19 @@ export default function BookDetail() {
     }
   };
 
+  const handleResetToBoundaries = async () => {
+    setShowChangeBoundariesConfirm(false);
+    try {
+      await api.books.resetToBoundaries(bookId!);
+      setBook((prev) => (prev ? { ...prev, status: "ocr_complete" } : prev));
+      setEmbedStats(null);
+      setClusterStats(null);
+      navigate(`/books/${bookId}/boundaries`);
+    } catch (e: any) {
+      setError(e.message);
+    }
+  };
+
   const handleEmbed = async () => {
     setShowReembedConfirm(false);
     try {
@@ -142,6 +157,7 @@ export default function BookDetail() {
     "ocr_complete",
     "boundaries_pending",
     "segments_complete",
+    "error",
   ].includes(book.status);
   const canEmbed = [
     "segments_complete",
@@ -151,6 +167,7 @@ export default function BookDetail() {
     "clustered",
     "labeling",
     "labeled",
+    "error",
   ].includes(book.status);
   const canCluster = [
     "embedded",
@@ -159,6 +176,18 @@ export default function BookDetail() {
     "clustering",
     "labeling",
   ].includes(book.status);
+
+  const canChangeBoundaries = [
+    "embedded",
+    "embedding",
+    "clustering",
+    "clustered",
+    "labeling",
+    "labeled",
+  ].includes(book.status);
+  const changeBoundariesActive = ["embedded", "clustered", "labeled"].includes(
+    book.status,
+  );
 
   return (
     <div style={{ maxWidth: 700 }}>
@@ -263,14 +292,76 @@ export default function BookDetail() {
                 : "No boundaries defined yet"}
             </p>
           )}
-          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-            <button
-              className="btn btn-primary"
-              disabled={!canMark}
-              onClick={() => navigate(`/books/${bookId}/boundaries`)}
+          {showChangeBoundariesConfirm && (
+            <div
+              style={{
+                margin: "0 0 0.75rem",
+                padding: "0.875rem 1rem",
+                background: "#fffbeb",
+                border: "1px solid #fcd34d",
+                borderRadius: 8,
+                fontSize: "0.85rem",
+                color: "#92400e",
+              }}
             >
-              Open Boundary Editor
-            </button>
+              <p style={{ margin: "0 0 0.5rem", fontWeight: 600 }}>
+                ⚠️ Delete embeddings and clusters?
+              </p>
+              <p style={{ margin: "0 0 0.75rem", lineHeight: 1.5 }}>
+                Reopening the boundary editor will permanently delete all
+                existing{" "}
+                {embedStats ? (
+                  <strong>{embedStats.chunk_count} chunks</strong>
+                ) : (
+                  "chunks"
+                )}{" "}
+                and clusters. Your OCR pages and boundary markers will be
+                preserved. You will need to re-run embedding and clustering
+                afterward.
+              </p>
+              <div style={{ display: "flex", gap: "0.5rem" }}>
+                <button
+                  className="btn btn-primary"
+                  onClick={handleResetToBoundaries}
+                >
+                  Yes, reopen editor
+                </button>
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => setShowChangeBoundariesConfirm(false)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+            {canChangeBoundaries ? (
+              <button
+                style={{
+                  color: "#9ca3af",
+                  background: "transparent",
+                  border: "1px solid #d1d5db",
+                  borderRadius: 6,
+                  padding: "0.4rem 0.9rem",
+                  cursor: changeBoundariesActive ? "pointer" : "default",
+                  opacity: changeBoundariesActive ? 1 : 0.5,
+                  fontSize: "0.875rem",
+                }}
+                disabled={!changeBoundariesActive}
+                onClick={() => setShowChangeBoundariesConfirm(true)}
+              >
+                Change Boundaries
+              </button>
+            ) : (
+              <button
+                className="btn btn-primary"
+                disabled={!canMark}
+                onClick={() => navigate(`/books/${bookId}/boundaries`)}
+              >
+                Open Boundary Editor
+              </button>
+            )}
             {needsBackfill && (
               <button
                 className="btn btn-secondary"
