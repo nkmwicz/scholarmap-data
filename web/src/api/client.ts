@@ -31,6 +31,8 @@ export interface Book {
   status: string;
   gallica_url: string | null;
   gallica_offset: number | null;
+  chunk_total: number;
+  chunk_done: number;
 }
 
 export interface OcrPage {

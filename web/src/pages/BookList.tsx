@@ -619,67 +619,83 @@ export default function BookList() {
             >
               <div
                 className="card"
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
+                style={{ padding: 0, overflow: "hidden" }}
               >
-                <div>
-                  <strong>{book.title}</strong>
-                  {book.author && (
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    padding: "1rem 1.25rem",
+                  }}
+                >
+                  <div>
+                    <strong>{book.title}</strong>
+                    {book.author && (
+                      <span
+                        style={{
+                          color: "#374151",
+                          fontSize: "0.85rem",
+                          marginLeft: "0.5rem",
+                        }}
+                      >
+                        — {book.author}
+                      </span>
+                    )}
+                    {book.year && (
+                      <span
+                        style={{
+                          color: "#6b7280",
+                          fontSize: "0.8rem",
+                          marginLeft: "0.4rem",
+                        }}
+                      >
+                        ({book.year})
+                      </span>
+                    )}
+                    {book.volume_number != null && (
+                      <span
+                        style={{
+                          color: "#6b7280",
+                          fontSize: "0.8rem",
+                          marginLeft: "0.4rem",
+                        }}
+                      >
+                        vol. {book.volume_number}
+                      </span>
+                    )}
                     <span
                       style={{
-                        color: "#374151",
-                        fontSize: "0.85rem",
+                        color: "#6b7280",
+                        fontSize: "0.8rem",
                         marginLeft: "0.5rem",
                       }}
                     >
-                      — {book.author}
+                      {book.slug}
                     </span>
-                  )}
-                  {book.year && (
                     <span
                       style={{
-                        color: "#6b7280",
-                        fontSize: "0.8rem",
-                        marginLeft: "0.4rem",
+                        color: "#9ca3af",
+                        fontSize: "0.75rem",
+                        marginLeft: "0.75rem",
                       }}
                     >
-                      ({book.year})
+                      {book.document_type}
                     </span>
-                  )}
-                  {book.volume_number != null && (
-                    <span
-                      style={{
-                        color: "#6b7280",
-                        fontSize: "0.8rem",
-                        marginLeft: "0.4rem",
-                      }}
-                    >
-                      vol. {book.volume_number}
-                    </span>
-                  )}
-                  <span
-                    style={{
-                      color: "#6b7280",
-                      fontSize: "0.8rem",
-                      marginLeft: "0.5rem",
-                    }}
-                  >
-                    {book.slug}
-                  </span>
-                  <span
-                    style={{
-                      color: "#9ca3af",
-                      fontSize: "0.75rem",
-                      marginLeft: "0.75rem",
-                    }}
-                  >
-                    {book.document_type}
-                  </span>
+                  </div>
+                  <StatusBadge status={book.status} />
                 </div>
-                <StatusBadge status={book.status} />
+                {book.chunk_total > 0 && (
+                  <div style={{ height: 4, background: "#e5e7eb" }}>
+                    <div
+                      style={{
+                        height: "100%",
+                        width: `${Math.round((book.chunk_done / book.chunk_total) * 100)}%`,
+                        background: "#7c3aed",
+                      }}
+                    />
+                  </div>
+                )}
               </div>
             </Link>
           ))}

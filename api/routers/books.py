@@ -10,7 +10,7 @@ from fastapi import (
     UploadFile,
 )
 from pydantic import BaseModel
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.db import get_db
@@ -42,6 +42,8 @@ class BookOut(BaseModel):
     status: str
     gallica_url: str | None
     gallica_offset: int | None
+    chunk_total: int = 0
+    chunk_done: int = 0
 
     model_config = {"from_attributes": True}
 
@@ -53,8 +55,38 @@ class GallicaUpdate(BaseModel):
 
 @router.get("", response_model=list[BookOut])
 async def list_books(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Book).order_by(Book.created_at.desc()))
-    return result.scalars().all()
+    books_result = await db.execute(select(Book).order_by(Book.created_at.desc()))
+    books = books_result.scalars().all()
+
+    stats_result = await db.execute(text("""
+        SELECT s.book_id,
+               COUNT(sc.id)                                                       AS chunk_total,
+               COUNT(sc.id) FILTER (WHERE sc.neo4j_entered OR sc.unimportant)    AS chunk_done
+        FROM segments s
+        JOIN segment_chunks sc ON sc.segment_id = s.id
+        GROUP BY s.book_id
+    """))
+    stats = {str(row.book_id): (row.chunk_total, row.chunk_done) for row in stats_result}
+
+    out = []
+    for book in books:
+        total, done = stats.get(str(book.id), (0, 0))
+        out.append({
+            "id": book.id,
+            "slug": book.slug,
+            "title": book.title,
+            "author": book.author,
+            "year": book.year,
+            "volume_number": book.volume_number,
+            "description": book.description,
+            "document_type": book.document_type,
+            "status": book.status,
+            "gallica_url": book.gallica_url,
+            "gallica_offset": book.gallica_offset,
+            "chunk_total": total,
+            "chunk_done": done,
+        })
+    return out
 
 
 @router.post("", response_model=BookOut, status_code=201)
