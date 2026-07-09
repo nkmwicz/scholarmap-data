@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routers import books, segments, embed, clusters, search, chunks
+from api.routers import books, segments, embed, clusters, search, chunks, backup
 
 logger = logging.getLogger("scholarmap")
 
@@ -31,6 +31,7 @@ app.include_router(embed.router, prefix="/api/books", tags=["embed"])
 app.include_router(clusters.router, prefix="/api/books", tags=["clusters"])
 app.include_router(chunks.router, prefix="/api/books", tags=["chunks"])
 app.include_router(search.router, prefix="/api/search", tags=["search"])
+app.include_router(backup.router, prefix="/api/backup", tags=["backup"])
 
 
 @app.get("/api/health")

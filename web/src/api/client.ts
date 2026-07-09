@@ -319,6 +319,36 @@ export const api = {
       request<ClusterChunk[]>(`/books/${bookId}/clusters/${clusterId}/chunks`),
   },
 
+  backup: {
+    export: async () => {
+      const res = await fetch(`${BASE}/backup/export`);
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`${res.status} ${res.statusText}: ${text}`);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const ts = new Date().toISOString().slice(0, 10);
+      a.download = `scholardata-backup-${ts}.json.gz`;
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    },
+    import: async (file: File): Promise<{ imported_books: number }> => {
+      const form = new FormData();
+      form.append("file", file);
+      return request<{ imported_books: number }>("/backup/import", {
+        method: "POST",
+        headers: {},
+        body: form,
+      });
+    },
+  },
+
   chunks: {
     summarize: (bookId: string, chunkId: string, force = false) =>
       request<{ chunk_id: string; ai_summary: ChapterSummary | null }>(

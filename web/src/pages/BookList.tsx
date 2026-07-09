@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   api,
@@ -55,6 +55,10 @@ export default function BookList() {
     document_type: "letters" as DocumentType,
   });
   const [creating, setCreating] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<string | null>(null);
+  const importRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
   const load = () => {
@@ -69,6 +73,36 @@ export default function BookList() {
   useEffect(() => {
     load();
   }, []);
+
+  const handleExport = async () => {
+    setExporting(true);
+    setError("");
+    try {
+      await api.backup.export();
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    setImporting(true);
+    setError("");
+    setImportResult(null);
+    try {
+      const result = await api.backup.import(file);
+      setImportResult(`Imported ${result.imported_books} book${result.imported_books !== 1 ? "s" : ""}`);
+      load();
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setImporting(false);
+    }
+  };
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -447,13 +481,41 @@ export default function BookList() {
           }}
         >
           <h1 style={{ margin: 0 }}>Books</h1>
-          <button
-            className="btn btn-primary"
-            onClick={() => setShowForm(!showForm)}
-          >
-            {showForm ? "Cancel" : "+ New Book"}
-          </button>
+          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+            <button
+              className="btn btn-secondary"
+              onClick={handleExport}
+              disabled={exporting}
+            >
+              {exporting ? "Exporting…" : "Export Backup"}
+            </button>
+            <button
+              className="btn btn-secondary"
+              onClick={() => importRef.current?.click()}
+              disabled={importing}
+            >
+              {importing ? "Importing…" : "Import Backup"}
+            </button>
+            <input
+              ref={importRef}
+              type="file"
+              accept=".json,.gz,.json.gz"
+              style={{ display: "none" }}
+              onChange={handleImport}
+            />
+            <button
+              className="btn btn-primary"
+              onClick={() => setShowForm(!showForm)}
+            >
+              {showForm ? "Cancel" : "+ New Book"}
+            </button>
+          </div>
         </div>
+        {importResult && (
+          <p style={{ color: "#059669", fontSize: "0.85rem", margin: "0 0 0.75rem" }}>
+            {importResult}
+          </p>
+        )}
 
         {showForm && (
           <div
