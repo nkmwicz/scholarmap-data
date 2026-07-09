@@ -190,7 +190,7 @@ export default function BookDetail() {
   );
 
   return (
-    <div style={{ maxWidth: 700 }}>
+    <div style={{ maxWidth: 700, margin: "0 auto" }}>
       <Link to="/" style={{ color: "#6b7280", fontSize: "0.85rem" }}>
         ← All books
       </Link>
