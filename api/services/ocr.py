@@ -1,11 +1,12 @@
-import base64
 import logging
 import os
+import time
 import uuid
 from pathlib import Path
 
 import httpx
 from mistralai.client import Mistral
+from mistralai.client.errors import SDKError
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,13 +14,70 @@ from api.models import Book, OcrPage
 
 logger = logging.getLogger(__name__)
 
-# In-memory progress messages keyed by book_id string.
-# Cleared when OCR completes or errors.
+# In-memory progress/error messages keyed by book_id string.
+# Cleared when a new OCR run starts; left in place on error so the UI can
+# show why the last run failed, and cleared again on success.
 _ocr_progress: dict[str, str] = {}
+
+_MAX_RETRIES = 3
+_RETRY_BASE_WAIT = 5  # seconds; doubles on each successive transient failure
+_RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 
 
 def get_ocr_progress(book_id: str) -> str | None:
     return _ocr_progress.get(book_id)
+
+
+def _is_retryable(exc: Exception) -> bool:
+    if isinstance(exc, httpx.TransportError):
+        return True
+    if isinstance(exc, SDKError):
+        return exc.status_code in _RETRYABLE_STATUS_CODES
+    return False
+
+
+def _describe_error(exc: Exception) -> str:
+    if isinstance(exc, httpx.TimeoutException):
+        return (
+            "Mistral didn't respond in time (network timeout) — this can happen "
+            f"with very large PDFs. Try again. Details: {exc}"
+        )
+    if isinstance(exc, httpx.TransportError):
+        return (
+            "Connection to Mistral was interrupted (network/SSL error), usually "
+            f"transient. Try again. Details: {exc}"
+        )
+    if isinstance(exc, SDKError) and exc.status_code in _RETRYABLE_STATUS_CODES:
+        return (
+            f"Mistral's API returned an error (status {exc.status_code}), "
+            f"usually transient. Try again. Details: {exc}"
+        )
+    return f"OCR failed: {exc}"
+
+
+def _with_retries(fn, description: str, book_id: uuid.UUID):
+    last_exc: Exception | None = None
+    for attempt in range(_MAX_RETRIES):
+        try:
+            return fn()
+        except Exception as exc:
+            if not _is_retryable(exc):
+                raise
+            last_exc = exc
+            if attempt < _MAX_RETRIES - 1:
+                wait = _RETRY_BASE_WAIT * (2**attempt)
+                logger.warning(
+                    "%s failed for book %s (attempt %d/%d): %s — retrying in %ds",
+                    description, book_id, attempt + 1, _MAX_RETRIES, exc, wait,
+                )
+                _ocr_progress[str(book_id)] = (
+                    f"{description} hit a transient error — retrying "
+                    f"({attempt + 2}/{_MAX_RETRIES})…"
+                )
+                time.sleep(wait)
+                continue
+            raise
+    raise last_exc  # pragma: no cover — loop always returns or raises
 
 
 async def run_ocr(book_id: uuid.UUID, pdf_bytes: bytes, db: AsyncSession) -> None:
@@ -28,8 +86,6 @@ async def run_ocr(book_id: uuid.UUID, pdf_bytes: bytes, db: AsyncSession) -> Non
     Updates book status: ocr_processing → ocr_complete.
     """
     api_key = os.environ["MISTRAL_KEY"]
-    # Use a custom httpx client with a generous write timeout so large
-    # base64-encoded PDFs don't time out during upload.
     http_client = httpx.Client(timeout=httpx.Timeout(timeout=300.0, write=300.0))
     client = Mistral(api_key=api_key, timeout_ms=300_000, client=http_client)
 
@@ -41,27 +97,57 @@ async def run_ocr(book_id: uuid.UUID, pdf_bytes: bytes, db: AsyncSession) -> Non
 
     pdf_mb = len(pdf_bytes) / 1_048_576
     logger.info("OCR started for book %s (%.1f MB PDF)", book_id, pdf_mb)
+    _ocr_progress[str(book_id)] = f"Uploading {pdf_mb:.1f} MB PDF to Mistral…"
 
-    encoded = base64.b64encode(pdf_bytes).decode("utf-8")
-    _ocr_progress[str(book_id)] = (
-        f"Sending {pdf_mb:.1f} MB to Mistral OCR — waiting for response…"
-    )
-
+    uploaded_file_id: str | None = None
     try:
-        ocr_response = client.ocr.process(
-            model="mistral-ocr-latest",
-            document={
-                "type": "document_url",
-                "document_url": f"data:application/pdf;base64,{encoded}",
-            },
-            include_image_base64=False,
+        # Upload the raw PDF via Mistral's Files API (multipart) instead of
+        # inlining it as a base64 data URL — for large files, base64 inflates
+        # the payload ~33% and forces one giant single-shot POST, which is far
+        # more prone to being interrupted by network/SSL errors or timeouts.
+        uploaded = _with_retries(
+            lambda: client.files.upload(
+                file={"file_name": f"{book_id}.pdf", "content": pdf_bytes},
+                purpose="ocr",
+            ),
+            "PDF upload",
+            book_id,
+        )
+        uploaded_file_id = uploaded.id
+
+        _ocr_progress[str(book_id)] = "Upload complete — requesting signed URL…"
+        signed = _with_retries(
+            lambda: client.files.get_signed_url(file_id=uploaded.id),
+            "Signed URL request",
+            book_id,
+        )
+
+        _ocr_progress[str(book_id)] = "Running OCR — waiting for response…"
+        ocr_response = _with_retries(
+            lambda: client.ocr.process(
+                model="mistral-ocr-latest",
+                document={"type": "document_url", "document_url": signed.url},
+                include_image_base64=False,
+            ),
+            "OCR processing",
+            book_id,
         )
     except Exception as exc:
-        logger.error("OCR failed for book %s: %s", book_id, exc)
+        message = _describe_error(exc)
+        logger.error("OCR failed for book %s: %s", book_id, message)
         book.status = "error"
-        _ocr_progress.pop(str(book_id), None)
+        _ocr_progress[str(book_id)] = message
         await db.commit()
         raise exc
+    finally:
+        if uploaded_file_id:
+            try:
+                client.files.delete(file_id=uploaded_file_id)
+            except Exception as exc:
+                logger.warning(
+                    "Failed to delete Mistral file %s for book %s: %s",
+                    uploaded_file_id, book_id, exc,
+                )
 
     page_count = len(ocr_response.pages)
     logger.info("OCR response received for book %s — %d pages", book_id, page_count)

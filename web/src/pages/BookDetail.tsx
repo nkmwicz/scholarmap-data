@@ -10,6 +10,7 @@ export default function BookDetail() {
   const [uploading, setUploading] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [ocrMessage, setOcrMessage] = useState<string | null>(null);
+  const [ocrError, setOcrError] = useState<string | null>(null);
   const [showReembedConfirm, setShowReembedConfirm] = useState(false);
   const [showChangeBoundariesConfirm, setShowChangeBoundariesConfirm] =
     useState(false);
@@ -103,10 +104,24 @@ export default function BookDetail() {
     return () => clearInterval(interval);
   }, [bookId, book?.status]);
 
+  // Once OCR errors out, fetch the last progress message once — the backend
+  // leaves the failure reason there instead of clearing it.
+  useEffect(() => {
+    if (!bookId || book?.status !== "error") {
+      setOcrError(null);
+      return;
+    }
+    api.books
+      .ocrProgress(bookId)
+      .then((r) => setOcrError(r.message))
+      .catch(() => {});
+  }, [bookId, book?.status]);
+
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !bookId) return;
     setUploading(true);
+    setOcrError(null);
     try {
       await api.books.uploadPdf(bookId, file);
       setBook((prev) => (prev ? { ...prev, status: "ocr_processing" } : prev));
@@ -226,6 +241,21 @@ export default function BookDetail() {
               }}
             >
               ⏳ {ocrMessage ?? "Processing…"}
+            </p>
+          ) : book.status === "error" ? (
+            <p
+              style={{
+                margin: "0 0 0.75rem",
+                padding: "0.625rem 0.75rem",
+                background: "#fef2f2",
+                border: "1px solid #fecaca",
+                borderRadius: 6,
+                color: "#991b1b",
+                fontSize: "0.85rem",
+                lineHeight: 1.5,
+              }}
+            >
+              ✗ {ocrError ?? "OCR failed. Try uploading again."}
             </p>
           ) : ocrDone ? (
             <p
