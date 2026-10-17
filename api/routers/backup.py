@@ -39,6 +39,12 @@ class _Encoder(json.JSONEncoder):
         return super().default(obj)
 
 
+def _parse_dt(value: str | None) -> datetime:
+    if not value:
+        return datetime.now(timezone.utc)
+    return datetime.fromisoformat(value)
+
+
 def _embedding_to_list(emb) -> list[float] | None:
     if emb is None:
         return None
@@ -257,8 +263,8 @@ async def import_backup(
                 "status": book_data["status"],
                 "gallica_url": book_data.get("gallica_url"),
                 "gallica_offset": book_data.get("gallica_offset"),
-                "created_at": book_data.get("created_at"),
-                "updated_at": book_data.get("updated_at"),
+                "created_at": _parse_dt(book_data.get("created_at")),
+                "updated_at": _parse_dt(book_data.get("updated_at")),
             },
         )
 
@@ -376,7 +382,7 @@ async def import_backup(
                            embedding, page_range, ai_summary, neo4j_entered, unimportant)
                         VALUES
                           (:id, :segment_id, :chunk_index, :text, :word_length,
-                           :embedding::vector, :page_range, :ai_summary, :neo4j_entered, :unimportant)
+                           CAST(:embedding AS vector), :page_range, :ai_summary, :neo4j_entered, :unimportant)
                         ON CONFLICT (id) DO NOTHING
                         """
                     ),
