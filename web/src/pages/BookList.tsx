@@ -8,6 +8,7 @@ import {
   type Segment,
   type SegmentChunkWithLabels,
 } from "../api/client";
+import { gallicaImageUrl } from "../api/gallica";
 import StatusBadge from "../components/StatusBadge";
 import {
   ChunkMap,
@@ -957,29 +958,26 @@ export default function BookList() {
                     <PanZoom
                       key={`${viewer.result.segment_id}-${viewer.pageIdx}`}
                     >
-                      {viewer.segment.page_range.map((page, i) => {
+                      {/* Only the current page is rendered: hidden <img>s still
+                          download, and bulk requests get throttled by Gallica. */}
+                      {(() => {
+                        const page = viewer.segment.page_range[viewer.pageIdx];
+                        if (page === undefined) return null;
                         const folio = page + (viewer.book!.gallica_offset ?? 0);
-                        const url = `${viewer.book!.gallica_url!.replace(/\/$/, "")}/f${folio}.highres`;
                         return (
-                          <div
-                            key={page}
+                          <img
+                            src={gallicaImageUrl(viewer.book!.gallica_url!, folio)}
+                            referrerPolicy="no-referrer"
+                            alt={`Folio ${folio}`}
                             style={{
-                              display: i === viewer.pageIdx ? "block" : "none",
+                              width: "100%",
+                              display: "block",
+                              pointerEvents: "none",
                             }}
-                          >
-                            <img
-                              src={url}
-                              alt={`Folio ${folio}`}
-                              style={{
-                                width: "100%",
-                                display: "block",
-                                pointerEvents: "none",
-                              }}
-                              draggable={false}
-                            />
-                          </div>
+                            draggable={false}
+                          />
                         );
-                      })}
+                      })()}
                     </PanZoom>
                   </div>
                 )}

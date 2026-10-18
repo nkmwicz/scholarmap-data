@@ -9,6 +9,7 @@ import {
   type Segment,
   type SegmentChunkWithLabels,
 } from "../api/client";
+import { gallicaImageUrl } from "../api/gallica";
 import { PanZoom } from "../components/PanZoom";
 import { SegmentSummaryPanel } from "../components/SegmentSummaryPanel";
 import { Neo4jToggleButton } from "../components/Neo4jToggleButton";
@@ -136,6 +137,10 @@ export default function ClusterView() {
   const gallicaPageUrl = (page: number) =>
     book?.gallica_url && book.gallica_offset !== null
       ? `${book.gallica_url}/f${page + book.gallica_offset!}.highres`
+      : null;
+  const gallicaPageImageUrl = (page: number) =>
+    book?.gallica_url && book.gallica_offset !== null
+      ? gallicaImageUrl(book.gallica_url, page + book.gallica_offset!)
       : null;
 
   const isChapters = book?.document_type === "chapters";
@@ -1363,32 +1368,29 @@ export default function ClusterView() {
                       <PanZoom
                         key={`${selectedChunk.chunk_id}-${chunkPageIdx}`}
                       >
-                        {selectedChunk.page_range.map((page, i) => {
-                          const url = gallicaPageUrl(page);
+                        {(() => {
+                          // Only the current page is rendered: hidden <img>s still
+                          // download, and bulk requests get throttled by Gallica.
+                          const page = selectedChunk.page_range[chunkPageIdx];
+                          const url =
+                            page === undefined ? null : gallicaPageImageUrl(page);
+                          if (!url) return null;
                           return (
-                            <div
-                              key={page}
+                            <img
+                              src={url}
+                              referrerPolicy="no-referrer"
+                              alt={`Folio ${
+                                page + (book?.gallica_offset ?? 0)
+                              }`}
                               style={{
-                                display: i === chunkPageIdx ? "block" : "none",
+                                width: "100%",
+                                display: "block",
+                                pointerEvents: "none",
                               }}
-                            >
-                              {url && (
-                                <img
-                                  src={url}
-                                  alt={`Folio ${
-                                    page + (book?.gallica_offset ?? 0)
-                                  }`}
-                                  style={{
-                                    width: "100%",
-                                    display: "block",
-                                    pointerEvents: "none",
-                                  }}
-                                  draggable={false}
-                                />
-                              )}
-                            </div>
+                              draggable={false}
+                            />
                           );
-                        })}
+                        })()}
                       </PanZoom>
                     </div>
                     {/* Chunk text */}
@@ -1845,30 +1847,27 @@ export default function ClusterView() {
                     )}
                     {/* PanZoom viewport — key resets transform on page/segment change */}
                     <PanZoom key={`${selectedSegment.id}-${pageIdx}`}>
-                      {selectedSegment.page_range.map((page, i) => {
-                        const url = gallicaPageUrl(page);
+                      {(() => {
+                        // Only the current page is rendered: hidden <img>s still
+                        // download, and bulk requests get throttled by Gallica.
+                        const page = selectedSegment.page_range[pageIdx];
+                        const url =
+                          page === undefined ? null : gallicaPageImageUrl(page);
+                        if (!url) return null;
                         return (
-                          <div
-                            key={page}
+                          <img
+                            src={url}
+                            referrerPolicy="no-referrer"
+                            alt={`Folio ${page + (book?.gallica_offset ?? 0)}`}
                             style={{
-                              display: i === pageIdx ? "block" : "none",
+                              width: "100%",
+                              display: "block",
+                              pointerEvents: "none",
                             }}
-                          >
-                            {url && (
-                              <img
-                                src={url}
-                                alt={`Folio ${page + (book?.gallica_offset ?? 0)}`}
-                                style={{
-                                  width: "100%",
-                                  display: "block",
-                                  pointerEvents: "none",
-                                }}
-                                draggable={false}
-                              />
-                            )}
-                          </div>
+                            draggable={false}
+                          />
                         );
-                      })}
+                      })()}
                     </PanZoom>
                   </div>
                   {viewMode === "text" &&
